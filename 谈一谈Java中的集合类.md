@@ -12,7 +12,7 @@ categories: Java
 
 集合类分为`List`,`Map`,`Set`. 先上张图
 
-![](https://ws1.sinaimg.cn/large/005UcYzagy1fv5utslrw5j30lr0ijjui.jpg)
+![nBge00.jpg](https://s2.ax1x.com/2019/09/12/nBge00.jpg)
 
 ### Map
 
