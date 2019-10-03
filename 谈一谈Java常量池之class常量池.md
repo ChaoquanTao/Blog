@@ -57,11 +57,36 @@ attribute_info | attributes | attributes_count |
 
 可以看出class文件中只有两种数据类型：无符号数和表，对于每个表，开头总会先说它的数量，然后表中的每个字段都有自己的结构。
 
+下面这个表描述了常量池中都有哪些表
 
+| 类型                             | 标志 | 描述                   |
+| -------------------------------- | ---- | ---------------------- |
+| CONSTANT_utf8_info               | 1    | UTF-8编码的字符串      |
+| CONSTANT_Integer_info            | 3    | 整形字面量             |
+| CONSTANT_Float_info              | 4    | 浮点型字面量           |
+| CONSTANT_Long_info               | ５   | 长整型字面量           |
+| CONSTANT_Double_info             | ６   | 双精度浮点型字面量     |
+| CONSTANT_Class_info              | ７   | 类或接口的符号引用     |
+| CONSTANT_String_info             | ８   | 字符串类型字面量       |
+| CONSTANT_Fieldref_info           | ９   | 字段的符号引用         |
+| CONSTANT_Methodref_info          | １０ | 类中方法的符号引用     |
+| CONSTANT_InterfaceMethodref_info | １１ | 接口中方法的符号引用   |
+| CONSTANT_NameAndType_info        | １２ | 字段或方法的符号引用   |
+| CONSTANT_MothodType_info         | １６ | 标志方法类型           |
+| CONSTANT_MethodHandle_info       | １５ | 表示方法句柄           |
+| CONSTANT_InvokeDynamic_info      | １８ | 表示一个动态方法调用点 |
+
+要注意的是每个表结构都是不同的，那么这样就有一个问题了，既然表结构都有不同，那么jvm自己又是怎么认识这些表项的呢。这里就有一点class文件设计的技巧了：虽然每个表都不同，但是我可以给每个表设置一个开始标志或者结束标志呀。class文件使用的是前一种，每个表项，都是以一个一字节的tag位作为开始的，如上表所示，每个tag代表了不同的表结构，然后根据tag去查找对应的表结构，按照对应的表结构来解析接下来的内容。
 
 #### class常量池里有啥
 
-看完class文件结构，再来细看一下class常量池，我们使用`javap`命令来简单明了的看下class常量池：
+看完class文件结构，再来细看一下class常量池，从上面的表格可以看出，常量池也是一个表，开头先说它的数量，即里面有几个常量，然后才是常量池的内容。
+
+>常量池中每一项又是一个表，且不同的详，表结构不同
+>
+>
+
+我们使用`javap`命令来简单明了的看下class常量池：
 
 ![](https://s2.ax1x.com/2019/09/04/nV0GB6.png)
 

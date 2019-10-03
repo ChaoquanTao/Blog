@@ -287,7 +287,7 @@ public class Test {
 
 反编译后得到如下信息：
 
-![n5cR3Q.png](https://s2.ax1x.com/2019/09/17/n5cR3Q.png)
+![](https://s2.ax1x.com/2019/09/17/n5cR3Q.png)
 
 可以看到，对于synchronized修饰的方法，JVM使用ACC_SYNCHRONIZED标记符来实现同步。顺便一提，这个方法的标记符是作为符号引用放在常量池中的，参考[这篇]([https://inewbie.top/2019/09/04/%E8%B0%88%E4%B8%80%E8%B0%88Java%E5%B8%B8%E9%87%8F%E6%B1%A0%E4%B9%8Bclass%E5%B8%B8%E9%87%8F%E6%B1%A0/](https://inewbie.top/2019/09/04/谈一谈Java常量池之class常量池/))文章。
 
@@ -435,9 +435,9 @@ synchronized保证的有序性是多个线程之间的有序性，即**被加锁
 
 ## 参考
 
-[探索 Java 同步机制](<https://www.ibm.com/developerworks/cn/java/j-lo-synchronized/index.html>)
+[探索 Java 同步机制](<https://www.ibm.com/developerworks/cn/java/j-lo-synchronized/index.html>)  
 
-[Java 中的 Monitor 机制](<https://segmentfault.com/a/1190000016417017>)
+[Java 中的 Monitor 机制](<https://segmentfault.com/a/1190000016417017>) 
 
 [不可不说的Java“锁”事](<https://tech.meituan.com/2018/11/15/java-lock.html>)
 

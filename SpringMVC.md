@@ -198,24 +198,32 @@ jdbcTemplateObject.update( SQL, new Object[]{20} );
 
    
 
-4. 
 
-5. 
 
-6. 
 
-7. 
+### 一直遇到的问题
 
-   
+1. controller不同
 
-8. 
+   配置时各种失误导致，没有扫描包，或者后缀检查配置有问题
 
-9. 
+2. 奇怪的415错误
 
-10. 
+   @RequestBody
 
-   
+   该注解常用来处理Content-Type: 不是`application/x-www-form-urlencoded`编码的内容，例如application/json, application/xml等
 
-  ​	
 
-11. 
+
+​	那么表单格式的内容用什么解析？
+
+两个问题：为什么我们请求的数据成为了表单格式？表单格式如何解析？
+
+表单提交默认就是`application/x-www-form-urlencoded`格式的
+
+表单type时button还是submit提交时貌似有很大不同
+
++ 点击type=submit的按钮，触发表单的onsubmit事件，然后提交表单
++ 点击type=button的按钮，也可以提交表单
+
+RequestBody注解如何运作

@@ -3,7 +3,7 @@ title: 剑指offer题解
 date: 2019-09-15 17:25:15
 updated: 2019-09-15 17:25:15
 tags: 剑指offer
-categories: 算法与数据结构
+categories: 题解
 ---
 
 ## 重建二叉树
@@ -183,3 +183,96 @@ public class MinNumInRotateArray {
 
 ```
 
+## 跳台阶
+
+一道典型的动态规划问题，对于跳上第n个台阶，只有两种跳法：
+
++ 从第n-1个台阶跳一步上去
++ 从第n-2个台阶跳两步上去
+
+所以我们有
+
+$$ f(n)=\left\{
+\begin{aligned}
+&1 & n=1 \\
+&2 & n=2 \\
+&f(n-1)+f(n-2) & n \ge 3
+\end{aligned}
+\right.$$
+
+其实就是个`Fibonaci`数列，可以用递归求解，但是太麻烦，我们用DP来求解
+
+
+
+### 数组版
+
+```java
+public class JumpFloor {
+//
+public static int JumpFloor(int target) {
+    if(target==1){
+        return 1;
+    }
+    if(target==2){
+        return 2;
+    }
+    int[] dp = new int[target+1];
+    dp[1]=1;
+    dp[2]=2;
+    for (int i=3; i<=target; i++){
+
+        dp[i]=dp[i-1]+dp[i-2];
+    }
+    return dp[target];
+}
+
+    public static void main(String[] args) {
+        System.out.println(JumpFloor(3));
+        System.out.println(JumpFloor(4));
+    }
+}
+
+```
+
+
+
+### 精简版
+
+```java
+public class JumpFloor {
+    public static int JumpFloor(int target) {
+        if(target==1){
+            return 1;
+        }
+        if(target==2){
+            return 2;
+        }
+        int pre=1,cur=2,res=0;
+        for(int i=3; i<=target; i++){
+            res = pre+cur;
+            pre=cur;
+            cur=res;
+        }
+        return res;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(JumpFloor(3));
+        System.out.println(JumpFloor(4));
+    }
+}
+```
+
+
+
+## 变态跳台阶
+
+题目描述:
+
+一只青蛙一次可以跳上1级台阶，也可以跳上2级……它也可以跳上n级。求该青蛙跳上一个n级的台阶总共有多少种跳法。
+
+解析：
+
+同样的，先写出递归方程，然后用递归或者DP来求解。
+
+相比于上面那一道普通跳台阶，这里只不过是能跳的台阶多了一些。
