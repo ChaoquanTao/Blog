@@ -2,7 +2,7 @@
 title: Java反射机制
 date: 2019-07-11 15:26:23
 updated: 2019-07-11 15:26:23
-tags: Java, 反射
+tags: 反射
 categories: Java
 ---
 
@@ -61,14 +61,14 @@ public static void main(){
 
 1. 对于默认构造函数的对象，我们可以
 
-```
+```java
 Class<?> c = String.class;
 Object str = c.newInstance();
 ```
 
 2. 对于带参的构造函数，我们可以
 
-```
+```java
 //获取String所对应的Class对象
 Class<?> c = String.class;
 //获取String类带一个String参数的构造器
@@ -78,6 +78,34 @@ Object obj = constructor.newInstance("23333");
 ```
 
 #### 获取方法和成员变量
+
+获取某个Class对象的方法集合，主要有以下几个方法：
+
+- `getDeclaredMethods` 方法返回类或接口声明的所有方法，包括公共、保护、默认（包）访问和私有方法，但不包括继承的方法。
+
+```java
+public Method[] getDeclaredMethods() throws SecurityException
+```
+
+- `getMethods` 方法返回某个类的所有公用（public）方法，包括其继承类的公用方法。
+
+```java
+public Method[] getMethods() throws SecurityException
+```
+
+- `getMethod` 方法返回一个特定的方法，public的，其中第一个参数为方法名称，后面的参数为方法的参数对应Class的对象。
+
+```java
+public Method getMethod(String name, Class<?>... parameterTypes)
+```
+
+
+
+`getDeclaredField`：所有已声明的成员变量，不问访问权限，但不能得到其父类的成员变量
+
+`getFileds`：访问公有的成员变量，包括继承的公用方法
+
+`getField(String name)` 获取指定的变量（public）
 
 #### 调用方法
 

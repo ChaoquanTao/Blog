@@ -2,7 +2,7 @@
 title: Java中的synchronized关键字
 date: 2019-09-13 16:51:50
 updated: 2019-09-13 16:51:50
-tags: synchronized
+tags: 关键字
 categories: Java
 ---
 
@@ -90,7 +90,7 @@ public class Test {
         SynTest synTest1 = new SynTest();
         SynTest synTest2 = new SynTest();
 
-        //两个thread传入的是同一对象
+        //两个thread传入的是不同对象
         Thread thread1 = new Thread(synTest1);
         Thread thread2 = new Thread(synTest2);
 
@@ -232,7 +232,7 @@ class Test implements Runnable
            SynTest synTest1 = new SynTest();
            SynTest synTest2 = new SynTest();
    
-           //两个thread传入的是同一对象
+           //两个thread传入的是不同对象
            Thread thread1 = new Thread(synTest1);
            Thread thread2 = new Thread(synTest2);
    
@@ -304,7 +304,7 @@ public class Test {
 
 至于原因，我们接下来解释。
 
-要说明这个问题，首先我们要理解Java的对象模型。
+要说明这个问题，首先我们要理解Monitor机制和Java的对象模型。
 
 ### Monitor
 
@@ -319,7 +319,7 @@ monitor，被翻译成监视器，或者管程。它是一种同步机制，在�
 
 从上面synchronized关键字的用法中可以看到，其实synchronized往往需要指定一个对象与之关联，即使它修饰非静态方法，关联的其实是this。这里关联的对象就是监视器对象monitor object, 并且我们在这个对象中定义了很多管理和唤醒线程的方法，比如wait, notify.
 
-你是不是发现了什么，对，没错，在java实现的monitor机制中，monitor object其实就是我们的java.lang.Object类定义的对象。
+你是不是发现了什么，是的没错，在java实现的monitor机制中（我们上面讲了不同的语言对moitor有不同的实现），monitor object其实就是我们的java.lang.Object类定义的对象。
 
 继续讲，这个监视器对象拥有一把锁，所以对于下面这个代码
 

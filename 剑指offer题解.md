@@ -3,7 +3,7 @@ title: 剑指offer题解
 date: 2019-09-15 17:25:15
 updated: 2019-09-15 17:25:15
 tags: 剑指offer
-categories: 题解
+categories: 数据结构与算法
 ---
 
 ## 重建二叉树
@@ -276,3 +276,116 @@ public class JumpFloor {
 同样的，先写出递归方程，然后用递归或者DP来求解。
 
 相比于上面那一道普通跳台阶，这里只不过是能跳的台阶多了一些。
+
+
+
+### 矩形覆盖
+
+#### 题目描述
+
+我们可以用2*1的小矩形横着或者竖着去覆盖更大的矩形。请问用n个2*1的小矩形无重叠地覆盖一个2*n的大矩形，总共有多少种方法？
+
+#### 解析
+
+同样的，先写状态转移方程：
+
+$$ f(n)=\left\{
+\begin{aligned}
+&1 & n=1 \\
+&2 & n=2 \\
+&f(n-1)+f(n-2) & n \ge 3
+\end{aligned}
+\right.$$
+
+依然是个斐波那契数列问题
+
+可以用递归和DP解决
+
+> 其实讲道理，我觉得这道题也可以用排列组合来求解的
+
+#### 代码
+
+```java
+ public int RectCover(int target) {
+        if (target == 1)
+            return 1;
+        if (target == 2)
+            return 2;
+        return RectCover(target - 1) + RectCover(target - 2);
+    }
+```
+
+DP:
+
+```java
+ public int RectCover(int target) {
+        int sum,p1,p2 ;
+        if(target <=0)
+            return 0;
+        if (target == 1)
+            return 1;
+        if (target == 2)
+            return 2;
+        p1=1;
+        p2=2;
+        sum=0;
+        for (int i = 3; i<=target; i++){
+            sum = p1 +p2 ;
+            p1 = p2 ;
+            p2 = sum ;
+        }
+        return sum;
+    }
+```
+
+### 二进制中1的个数
+
+#### 题目描述
+
+ 输入一个整数n，输出该数二进制表示中1的个数。其中负数用补码表示。 
+
+#### 解析
+
+方法一： 无符号右移输入的数字，然后和1逻辑与
+
+方法二：保持输入不动，每次右移数字1然后逻辑与
+
+方法三：将n和n-1逻辑与，消除一个n最右边的数字1
+
+#### 代码
+
+方法一：
+
+```java
+public class NumberOf1 {
+    public int NumberOf1(int n) {
+        int count = 0;
+        while (n!=0){
+            count += (n&1) ;
+            n = n>>>1;
+        }
+        return count;
+    }
+
+    public static void main(String[] args) {
+        System.out.println(new NumberOf1().NumberOf1(0x80000000));
+    }
+}
+
+```
+
+
+
+### 数值的整数次方
+
+#### 题目描述
+
+给定一个double类型的浮点数base和int类型的整数exponent。求base的exponent次方。
+
+保证base和exponent不同时为0
+
+#### 解析
+
+1. 方法一：for循环暴力输出，需要考虑到指数为负数等边界情况
+2. 方法二：使用递归将指数拆解进行计算。
+

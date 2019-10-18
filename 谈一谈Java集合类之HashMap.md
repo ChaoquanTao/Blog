@@ -24,7 +24,7 @@ categories: Java
 
 看一下Entry的结构：
 
-```
+```java
 final K key;
 V value;
 Entry<K,V> next;
@@ -33,7 +33,7 @@ int hash;
 
 put方法：
 
-```
+```java
 public V put(K key, V value) {
         if (table == EMPTY_TABLE) {
             inflateTable(threshold);
@@ -58,7 +58,7 @@ public V put(K key, V value) {
     }
 ```
 
-```
+```java
 void addEntry(int hash, K key, V value, int bucketIndex) {
         if ((size >= threshold) && (null != table[bucketIndex])) {
             resize(2 * table.length);
@@ -70,7 +70,7 @@ void addEntry(int hash, K key, V value, int bucketIndex) {
     }
 ```
 
-```
+```java
 void createEntry(int hash, K key, V value, int bucketIndex) {
         Entry<K,V> e = table[bucketIndex];
         table[bucketIndex] = new Entry<>(hash, key, value, e);
@@ -82,7 +82,7 @@ void createEntry(int hash, K key, V value, int bucketIndex) {
 
 resize方法：
 
-```
+```java
 void resize(int newCapacity) {
         Entry[] oldTable = table;
         int oldCapacity = oldTable.length;
@@ -98,7 +98,7 @@ void resize(int newCapacity) {
     }
 ```
 
-```
+```java
 void transfer(Entry[] newTable, boolean rehash) {
         int newCapacity = newTable.length;
         for (Entry<K,V> e : table) {
@@ -133,7 +133,7 @@ void transfer(Entry[] newTable, boolean rehash) {
 
 Node的数据结构如下：
 
-```
+```java
 final int hash;
 final K key;
 V value;
@@ -142,7 +142,7 @@ Node<K,V> next;
 
 put方法：
 
-```
+```java
 final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
                    boolean evict) {
         Node<K,V>[] tab; Node<K,V> p; int n, i;
@@ -195,7 +195,7 @@ final V putVal(int hash, K key, V value, boolean onlyIfAbsent,
 
 get方法：
 
-```
+```java
 final Node<K,V> getNode(int hash, Object key) {
         Node<K,V>[] tab; Node<K,V> first, e; int n; K k;
         if ((tab = table) != null && (n = tab.length) > 0 &&
@@ -240,7 +240,7 @@ synchronizing on some object that naturally encapsulates the map.
 
 以jdk 1.7为例，在put的代码中有以下方法：
 
-```
+```java
 void createEntry(int hash, K key, V value, int bucketIndex) {
         //先保存这个位置本来的元素
         Entry<K,V> e = table[bucketIndex];
@@ -292,6 +292,8 @@ void createEntry(int hash, K key, V value, int bucketIndex) {
 
 #### 1. jdk 1.7
 
+##### 工作原理
+
 使用分段锁技术，定义了`Segment`类，该类继承自`ReentryLock`, `ConcurrentHashMap`结构大概 如下：
 
 ![](https://s2.ax1x.com/2019/09/06/nKEgPK.png)
@@ -300,7 +302,7 @@ void createEntry(int hash, K key, V value, int bucketIndex) {
 
 `HashEntry`所包含的字段如下：
 
-```
+```java
 final int hash;
 final K key;
 volatile V value;
@@ -309,11 +311,11 @@ volatile HashEntry<K,V> next;
 
 可以发现，`hash`和`key`都是被final修饰的， `value`和`next`是被`volatile`修饰的，保证了多线程下的可见性。
 
-##### 并发存取
 
-1. put
 
-```
+##### put
+
+```java
 public V put(K key, V value) {
         Segment<K,V> s;
         if (value == null) //value不能为空
@@ -329,7 +331,7 @@ public V put(K key, V value) {
 
 从上述代码可以发现，`ConcurrentHashMap`中`value`不允许为空。段中的`put`方法如下：
 
-```
+```java
 final V put(K key, int hash, V value, boolean onlyIfAbsent) {
             HashEntry<K,V> node = tryLock() ? null :
                 scanAndLockForPut(key, hash, value);
@@ -381,9 +383,9 @@ final V put(K key, int hash, V value, boolean onlyIfAbsent) {
 
 
 
-2. rehash
+##### rehash
 
-```
+```java
 private void rehash(HashEntry<K,V> node) {
             /*
              * Reclassify nodes in each list to new table.  Because we
@@ -449,9 +451,9 @@ private void rehash(HashEntry<K,V> node) {
 
 这里主要要注意里面的一个优化，进行rehash时，由于扩容是二倍，所以本来桶中的那些entry要么在原处，要么在原位置+原容量的位置，也就是说桶中的entry只有两个去处：原地不动或者当前位置+容量。所以注释1处找到最后一个不在原桶中的元素后，这个元素后面的所有元素都不在原桶中且都在相同的索引处。
 
-3. get
+##### get
 
-```
+```java
 public V get(Object key) {
         Segment<K,V> s; // manually integrate access methods to reduce overhead
         HashEntry<K,V>[] tab;
@@ -473,7 +475,7 @@ public V get(Object key) {
 
 因为value都是volatile修饰的，所以get过程不需要加锁。
 
-4. size
+##### size
 
 size方法是跨段操作
 
@@ -483,6 +485,8 @@ size方法是跨段操作
 
 #### 2. jdk 1.8
 
+##### 工作原理
+
 底层使用红黑树，类似hashmap的优化：
 
 ![](https://s2.ax1x.com/2019/09/09/nYK6RU.jpg)
@@ -491,21 +495,21 @@ size方法是跨段操作
 
 
 
-put方法：
+##### put
 
 ![](https://s2.ax1x.com/2019/09/09/nYGUfI.png)
 
- get方法：
+##### get
 
 ![](https://s2.ax1x.com/2019/09/09/nYYdL8.png)
 
 
 
-size方法：
+##### size方法
 
 1.8中size方法就比较简单
 
-```
+```java
 public int size() {
         long n = sumCount();
         return ((n < 0L) ? 0 :
@@ -516,7 +520,7 @@ public int size() {
 
 sumCount方法：
 
-```
+```java
 final long sumCount() {
         CounterCell[] as = counterCells; CounterCell a;
         long sum = baseCount;
@@ -534,7 +538,7 @@ final long sumCount() {
 
 baseCount定义如下：
 
-```
+```java
 /**
  * Base counter value, used mainly when there is no contention,
  * but also as a fallback during table initialization
@@ -551,7 +555,7 @@ private transient volatile long baseCount;
 
 CounterCell结构如下：
 
-```
+```java
 /**
      * A padded cell for distributing counts.  Adapted from LongAdder
      * and Striped64.  See their internal docs for explanation.
@@ -562,9 +566,17 @@ CounterCell结构如下：
     }
 ```
 
+#### 1.7和1.8的区别
+
+|          | 1.7                      | 1.8                   |      |
+| -------- | ------------------------ | --------------------- | ---- |
+| 数据结构 | 链表                     | 红黑树                |      |
+| 并发控制 | 分段锁                   | CAS+synhcronized      |      |
+| size     | 多次计算，再决定是否加锁 | baseCount+CounterCell |      |
 
 
-#### 参考文献
+
+### 参考
 
 [Map 综述（三）：彻头彻尾理解 ConcurrentHashMap](<https://blog.csdn.net/justloveyou_/article/details/72783008>)（jdk 1.6）
 
