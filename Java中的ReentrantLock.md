@@ -2,17 +2,23 @@
 title: Java中的ReentrantLock
 date: 2019-09-17 14:56:35
 updated: 2019-09-17 14:56:35
-tags: ReentrantLock
+tags: Lock
 categories: Java
 ---
 
-ReentrantLock, 从名字来看，可重入锁，今天来看下它的具体实现。
+>  ReentrantLock, 从名字来看，可重入锁，今天来看下它的具体实现。
+
+特性：排他锁，内部实现了公平锁和非公平锁。
+
+
 
 它的继承关系如下：
 
 ![n5V010.png](https://s2.ax1x.com/2019/09/17/n5V010.png)
 
-以及还有三个内部类：`Sync`,  `NonfairSync `, `FairSync`.其中后两个都继承自Sync，而Sync又继承自[AQS]( [https://inewbie.top/2019/10/17/Java%E4%B8%AD%E7%9A%84AQS/](https://inewbie.top/2019/10/17/Java中的AQS/) )
+以及还有三个内部类：`Sync`,  `NonfairSync `, `FairSync`.其中后两个都继承自Sync，而Sync又继承自[AQS](https://inewbie.top/2019/10/17/Java中的AQS/) 
+
+
 
 可以看出，`ReentryLock`是在自己内部实现了公平锁和非公平锁的。
 
@@ -20,7 +26,7 @@ ReentrantLock, 从名字来看，可重入锁，今天来看下它的具体实�
 
 
 
-先来从整体上把握一下`ReentrantLock`, `ReentrantLock`之所以能有锁的功能，是因为它聚合了AQS类（当然这也是AQS类设计的初衷，AQS通过模板方式模式实现，设计者希望我们自己设计的状态同步组件重写具体的细节类，然后将这个状态同步组件聚合到我们的锁里面），`ReentrantLock`也正是这么做的。
+先来从整体上把握一下`ReentrantLock`, **`ReentrantLock`之所以能有锁的功能，是因为它聚合了AQS类**（当然这也是AQS类设计的初衷，AQS通过模板方式模式实现，设计者希望我们自己设计的状态同步组件重写具体的细节类，然后将这个状态同步组件聚合到我们的锁里面），`ReentrantLock`也正是这么做的。
 
 `ReentrantLock`的设计逻辑是这样的：
 
@@ -64,7 +70,9 @@ public final void acquire(int arg) {
 
 公平锁`FairSync`
 
-![1568705713770](C:\Users\Arrow\AppData\Roaming\Typora\typora-user-images\1568705713770.png)
+![MQzJ29.png](https://s2.ax1x.com/2019/11/11/MQzJ29.png)
+
+
 
 可以看到，相比于非公平锁的lock方法，公平锁的lock方法一开始执行就是排队，即acquire()方法，而非公平锁的lock方法上来二话不说就是先插队，即通过CAS改变自身持有该锁的状态
 

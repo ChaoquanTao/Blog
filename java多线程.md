@@ -1,7 +1,7 @@
 ---
 title: java多线程
 date: 2019-01-20 12:56:25
-tags: java多线程
+tags: 多线程
 categories: Java
 ---
 
@@ -90,7 +90,7 @@ protected T initialValue() {
 
 准确的讲，`interrupt()`方法并不是真正的中断线程，它的真正作用是修改线程中的标志位，然后我们根据标志位，手动的去中断这个线程（后面会讲到可能是根据标志位也可能是根据线程抛出的异常去手中断线程）。
 
-```
+```java
 public void interrupt() {
         if (this != Thread.currentThread())
             checkAccess();
@@ -130,13 +130,13 @@ interrupt()方法可以用来中断线程，根据所要中断的线程是阻塞
 上面的操作都提到了标志位，那么标志位怎么获得呢？
 
 + `interrupted()`:静态方法，调用它时，标志位会被清除。这意味着如果你连着调用两次这个方法，那么第二次结果肯定是false.
-+ `isInterrupted()`：非静态方法，调用它时，标志位不会被清楚。
++ `isInterrupted()`：非静态方法，调用它时，标志位不会被清除。
 
 
 
 下面是一个例子，相关说明已经写在了注释里
 
-```
+```java
 
 import static java.lang.Thread.sleep;
 
@@ -213,13 +213,13 @@ class MyThread2 extends Thread {
 
 我们通常使用的一种创建线程池的方式：
 
-```
+```java
 ExecuttorService executorService = new ThreadPoolExecutor(1,1,60,TimeUnit.SECONDS,new ArrayBlockingQueue<>(10));
 ```
 
 它的构造函数是这样的：
 
-```
+```java
 public ThreadPoolExecutor(int corePoolSize,
                               int maximumPoolSize,
                               long keepAliveTime,
@@ -246,13 +246,13 @@ public ThreadPoolExecutor(int corePoolSize,
 
 看`ThreadPoolExecutor`的定义，可以发现它继承了`AbstractExecutorService`
 
-```
+```java
 public class ThreadPoolExecutor extends AbstractExecutorService
 ```
 
 再来看下`AbstractExecutorService`的定义:
 
-```
+```java
 public abstract class AbstractExecutorService implements ExecutorService
 ```
 
@@ -260,7 +260,7 @@ public abstract class AbstractExecutorService implements ExecutorService
 
 再来看下`ExecutorService`接口
 
-```
+```java
 public interface ExecutorService extends Executor
 ```
 
@@ -286,8 +286,8 @@ public interface Executor{
 
 首先是`ctl`相关的：
 
-```
-private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
+```java
+	private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
     private static final int COUNT_BITS = Integer.SIZE - 3;
     private static final int COUNT_MASK = (1 << COUNT_BITS) - 1;
 
@@ -312,7 +312,7 @@ private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
 
 下面看下这几个拆解`ctl`的方法：
 
-```
+```java
     private static int runStateOf(int c)     { return c & ~COUNT_MASK; }
 ```
 
@@ -320,7 +320,7 @@ private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
 
 
 
-```
+```java
     private static int workerCountOf(int c)  { return c & COUNT_MASK; }
 ```
 
@@ -328,7 +328,7 @@ private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
 
 
 
-```
+```java
     private static int ctlOf(int rs, int wc) { return rs | wc; }
 ```
 
@@ -340,7 +340,7 @@ private final AtomicInteger ctl = new AtomicInteger(ctlOf(RUNNING, 0));
 
 它的代码如下：
 
-```
+```java
 public void execute(Runnable command) {
         if (command == null)
             throw new NullPointerException();
@@ -364,8 +364,8 @@ public void execute(Runnable command) {
 
 我们分批来看这块代码：
 
-```
-int c = ctl.get();
+```java
+		int c = ctl.get();
         if (workerCountOf(c) < corePoolSize) {
             if (addWorker(command, true))
                 return;
@@ -377,7 +377,7 @@ int c = ctl.get();
 
 
 
-```
+```java
 if (isRunning(c) && workQueue.offer(command)) {
             int recheck = ctl.get();
             if (! isRunning(recheck) && remove(command))
@@ -391,7 +391,7 @@ if (isRunning(c) && workQueue.offer(command)) {
 
 
 
-```
+```java
 else if (!addWorker(command, false))
             reject(command);
 ```

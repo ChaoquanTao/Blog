@@ -1,8 +1,8 @@
 ---
-title: Map中的hash方法
+title: HashMap中的hash方法
 date: 2019-10-08 20:50:13
 updated: 2019-10-08 20:50:13
-tags: 集合类
+tags: HashMap
 categories: Java
 ---
 

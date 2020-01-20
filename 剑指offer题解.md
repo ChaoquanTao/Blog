@@ -389,3 +389,142 @@ public class NumberOf1 {
 1. 方法一：for循环暴力输出，需要考虑到指数为负数等边界情况
 2. 方法二：使用递归将指数拆解进行计算。
 
+
+
+### 调整数组顺序使奇数位于偶数前面
+
+#### 题目描述
+
+输入一个整数数组，实现一个函数来调整该数组中数字的顺序，使得所有的奇数位于数组的前半部分，所有的偶数位于数组的后半部分，并保证奇数和奇数，偶数和偶数之间的相对位置不变。
+
+#### 解析
+
+这个问题使用冒泡排序的思想也可以解决，相邻元素比较并交换，问题在于这样做的话无谓的比较和交换比较多。比如说有一长串都是奇数或者偶数，这种情况我们就可以跳过了，其实是有点类似与KMP算法的。
+
+所以我们需要两个指针，一个指向当前出现的第一个偶数，一个指向第一个偶数出现后的第一个奇数，然后奇数放在偶数位，偶数们依次后移。
+
+
+
+#### 代码
+
+```java
+ public void reOrderArray(int [] array) {
+        int feven=0; //第一个偶数的位置
+        int fodd=1; // 第一个偶数后第一个奇数的位置
+        int i=0;
+        if(array==null || array.length==1)
+            return ;
+        while(fodd<=array.length){
+            for(; feven<array.length; feven++){ //寻找第一个偶数的位置
+                if(isEven(array[feven])){
+
+                    break;
+                }
+            }
+            for(fodd=feven+1; fodd<array.length; fodd++){//找到偶数后第一个奇数的位置
+                if(!isEven(array[fodd])){
+
+                    break;
+                }
+            }
+            if(fodd>=array.length)
+                break;
+            int t = array[fodd] ;
+            for(int j = fodd-1; j>=feven; j--){
+                array[j+1] = array[j];
+            }
+            array[feven] = t ;
+
+
+        }
+
+    }
+
+    public boolean isEven(int e){
+        return e%2==0 ;
+    }
+```
+
+或者
+
+```java
+public class Solution {
+    public void reOrderArray(int [] array) {
+       for(int i= 0;i<array.length-1;i++){
+            for(int j=0;j<array.length-1-i;j++){
+                if(array[j]%2==0&&array[j+1]%2==1){
+                    int t = array[j];
+                    array[j]=array[j+1];
+                    array[j+1]=t;
+                }
+            }
+        }
+    }
+}
+```
+
+很类似于冒泡排序，每一轮冒泡保证至少有一个元素归位。
+
+其实就是个冒泡排序，只不过我们常见的冒泡排序里面比较的是元素大小，这里比较的是元素奇偶，还有很重要的一点就是冒泡排序是稳定的，对应到题目中就是**保证奇数和奇数，偶数和偶数之间的相对位置不变**。
+
+这里相当于是一个通用性的冒泡排序，至于按照什么条件进行相邻元素比较是可插拔的，实在是妙啊。
+
+所以理论上讲，这道题只要是稳定的排序算法应该是都可以用的。
+
+那哪些排序稳定哪些排序不稳定呢？
+
+一言以蔽之：涉及到非相邻交换的排序都是不稳定的，比如选择排序，比如快速排序，希尔排序，比如堆排序。
+
+
+
+### 链表中倒数第k个结点
+
+#### 题目描述
+
+输入一个链表，输出该链表中倒数第k个结点。
+
+
+
+#### 分析
+
+用标尺法就可以解决。
+
+#### 代码
+
+```java
+/*
+public class ListNode {
+    int val;
+    ListNode next = null;
+
+    ListNode(int val) {
+        this.val = val;
+    }
+}*/
+public class Solution {
+    public ListNode FindKthToTail(ListNode head,int k) {
+		ListNode cur = head ;
+        if(head == null){
+            return null ;
+        }
+        if(k==0){
+            return null; 
+        }
+        ListNode post = cur.next ;
+        int i = 1 ;
+        while(post != null && i<k){
+            post = post.next ;
+            i++;
+        }
+        if(i<k){
+            return null ;
+        }
+        while(post !=null){
+            cur = cur.next;
+            post = post.next ;
+        }
+        return cur ;
+    }
+}
+```
+

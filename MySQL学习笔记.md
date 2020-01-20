@@ -49,3 +49,9 @@ redo log是InnoDB所有的，它的大小是固定的，可以通过特定参数
 [![Z7sGge.png](https://s2.ax1x.com/2019/07/16/Z7sGge.png)](https://imgchr.com/i/Z7sGge)
 
 它的大意是这样的，当有一个数据库的修改时，先将修改后的值放到内存，然后在redo log里面记录一哈，此时的状态是prepare, 然后在bin log里面再记录一哈，最后提交事务，将redo log里面的状态设置为commit. 等到夜深人静的时候，就可以通过redo里面这些状态为commit的字段来修改数据库了。
+
+
+
+### change buffer
+
+今天学习了change buffer, 简单来说，change buffer是用给普通索引的，对于频繁的更新或者插入操作，唯一索引需要把对应数据页读入内存检查唯一性，这势必会增加IO开销。而对普通索引来说，则没有必要检查唯一性，所以遇到更新或者插入操作，不着急把数据页读入内存进行更新，而是可以先把要进行的操作读入一个change buffer中，等后面啥时候机缘巧合了把对应数据页读进来和change buffer merge一下。

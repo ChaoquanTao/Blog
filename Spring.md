@@ -1,12 +1,13 @@
 ---
 title: Spring
 date: 2018-04-15 16:27:20
+tags: Spring
 categories: JavaWeb
 ---
 
 ### 初探Spring
 
-类似于Struts2,Spring也是通过xml配置文件来对类进行操作的
+类似于Struts2, Spring也是通过xml配置文件来对类进行操作的
 
 在Struts2中，对于表单的提交，通过将表单中标签的name属性设置为Bean中对应的属性，通过配置struts.xml可以让框架自己去调用对应的setter，这里也是类似，只不过设置的是applicationContext.xml,这个配置文件将会告诉容器如何操作具体的类。 看一段代码：
 
@@ -344,7 +345,7 @@ beans.xml
 
   @ModelAttribute注解有两个用法，一个是用于方法上，一个是用于参数上。**用于方法上时，被其注释的方法会在Controller每个方法执行前被执行，因此通常用来在处理@RequestMapping之前为请求绑定需要从后台查询的model；**用于参数上时，用来通过名称对应把相应名称的值绑定到注解的参数bean上
 
-+ ​
++ 
 
 总的来说，注解就是实现了请求的相关值与方法参数的绑定。
 
