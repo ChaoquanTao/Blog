@@ -1,7 +1,6 @@
 ---
 title: Java中的synchronized关键字
 date: 2019-09-13 16:51:50
-updated: 2019-09-13 16:51:50
 tags: 关键字
 categories: Java
 ---
@@ -292,6 +291,8 @@ public class Test {
 可以看到，对于synchronized修饰的方法，JVM使用ACC_SYNCHRONIZED标记符来实现同步。顺便一提，这个方法的标记符是作为符号引用放在常量池中的，参考[这篇]([https://inewbie.top/2019/09/04/%E8%B0%88%E4%B8%80%E8%B0%88Java%E5%B8%B8%E9%87%8F%E6%B1%A0%E4%B9%8Bclass%E5%B8%B8%E9%87%8F%E6%B1%A0/](https://inewbie.top/2019/09/04/谈一谈Java常量池之class常量池/))文章。
 
 对于synchronized修饰的代码块，则是使用monitorenter和monitorexit两个指令来实现同步。
+
+
 
 ## 原理
 
