@@ -3,7 +3,7 @@ title: Java中的ReentrantReadWriteLock
 date: 2019-10-17 21:59:10
 updated: 2019-10-17 21:59:10
 tags: Lock
-categories: Java`
+categories: Java
 ---
 
 ReentrantReadWriteLock
