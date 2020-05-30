@@ -1,6 +1,7 @@
 ---
 title: windows下tensorflow anoconda安装
-date: 
+date: 2018-05-31 12:00:00
+updated: 2018-05-31 12:00:00 
 categories: 教程
 ---
 

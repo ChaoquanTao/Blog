@@ -2,11 +2,11 @@
 title: Python学习笔记
 categories: 机器学习
 comments: true
+date: 2018-5-30 12:00:00
+updated: 2020-05-31 12:35:04
 ---
 
 
-
-# python学习笔记
 
 ###  语句
 
@@ -19,6 +19,7 @@ comments: true
 
 
    + 定义全局变量： 定义在函数外部或者用内部global修饰
+<!-- more -->
 
 ###  模块安装
 
