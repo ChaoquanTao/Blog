@@ -1,12 +1,12 @@
 ---
 title: Python学习笔记
+date: 2018-10-13 15:33:11
 categories: 机器学习
 comments: true
+updated: 2020-05-31 12:35:04
 ---
 
 
-
-# python学习笔记
 
 ###  语句
 
@@ -19,6 +19,7 @@ comments: true
 
 
    + 定义全局变量： 定义在函数外部或者用内部global修饰
+<!-- more -->
 
 ###  模块安装
 
@@ -68,7 +69,7 @@ comments: true
   l[:10:2] //前十个数每两个取一个
   ```
 
-  ​
+  
 
 + 列表生成式
 
@@ -78,7 +79,7 @@ comments: true
   [k+'='+v for k,v in d.items()]
   ```
 
-  ​
+  
 
 + 生成器
 
@@ -133,7 +134,7 @@ comments: true
 
   `Interator`的计算是惰性的，只有需要下一个值时它才会计算
 
-+ ​
++ 
 
 ### 函数式编程
 
@@ -169,7 +170,7 @@ comments: true
     10
     ```
 
-    ​
+    
 
 + filter
 

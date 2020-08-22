@@ -16,19 +16,19 @@ categories: Java
 
 先来看下它的实现关系
 
-![lock.png](http://ww1.sinaimg.cn/large/006ImZ0Ogy1g7zut7fhc7j30co03ldfv.jpg)
+![du6e6H.png](https://s1.ax1x.com/2020/08/18/du6e6H.png)
 
 我们会主要讨论圈出来的三个实现类
 
 再来看下Lock接口的成员
 
-![lock_member.png](http://ww1.sinaimg.cn/large/006ImZ0Ogy1g7zuvgi6t8j307304rwec.jpg)
+![du6M7t.png](https://s1.ax1x.com/2020/08/18/du6M7t.png)
 
 其中`lock()`,`tryLock()`,`tryLock(ong, TimeUnit)`以及`lockInterruptibly()`用来加锁，`unlock()`用来解锁。需要注意的是如果使用`lockInterruptibly()`方法来获取锁的话，如果线程没有获取成功而进入等待队列，那么这个线程是可以响应中断的，相比只下，使用`synchronized`关键字获取锁时如果进入等待队列，线程是不能响应中断的。
 
 
 
-`Lock`接口只是定义了实现锁的一系列约定，比如`lock()`,`unLock()`以及`tryLock()`等，具体的实现都是交给它的实现类去做的，比如`ReentrantLock`,`ReentrantReadWriteLock.ReadLock`和`ReentrantReadWriteLock.WriteLock`等。而这些实现类能够实现锁功能的关键，在于它们都聚合了一个AQS的实现类，AQS是一个抽象类，通过模板方法模式，提供了一系列状态同步的方法。
+`Lock`接口只是定义了实现锁的一系列约定，比如`lock()`,`unLock()`以及`tryLock()`等，具体的实现都是交给它的实现类去做的，比如`ReentrantLock`,`ReentrantReadWriteLock.ReadLock`和`ReentrantReadWriteLock.WriteLock`等。而这些实现类能够实现锁功能的关键，在于它们都聚合了一个[AQS](./Java中的AQS.md)的实现类，AQS是一个抽象类，通过模板方法模式，提供了一系列状态同步的方法。
 
 
 

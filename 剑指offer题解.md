@@ -6,7 +6,7 @@ tags: 剑指offer
 categories: 数据结构与算法
 ---
 
-## 重建二叉树
+### 重建二叉树
 
 前序遍历用来确定根节点，中序遍历用来确定左右子树以及大小
 
@@ -96,7 +96,7 @@ public class ReconsBinTree {
 }
 ```
 
-## 用两个栈实现队列
+### 用两个栈实现队列
 
 ```java
 import java.util.Stack;
@@ -140,7 +140,7 @@ public class Stack2Q {
 }
 ```
 
-## 旋转数组的最小数字
+### 旋转数组的最小数字
 
 ```java
 /**
@@ -183,7 +183,7 @@ public class MinNumInRotateArray {
 
 ```
 
-## 跳台阶
+### 跳台阶
 
 一道典型的动态规划问题，对于跳上第n个台阶，只有两种跳法：
 
@@ -263,9 +263,7 @@ public class JumpFloor {
 }
 ```
 
-
-
-## 变态跳台阶
+### 变态跳台阶
 
 题目描述:
 
@@ -276,8 +274,6 @@ public class JumpFloor {
 同样的，先写出递归方程，然后用递归或者DP来求解。
 
 相比于上面那一道普通跳台阶，这里只不过是能跳的台阶多了一些。
-
-
 
 ### 矩形覆盖
 
@@ -524,6 +520,202 @@ public class Solution {
             post = post.next ;
         }
         return cur ;
+    }
+}
+```
+
+
+
+### 树的子结构
+
+#### 题目描述
+
+输入两棵二叉树A，B，判断B是不是A的子结构。（ps：我们约定空树不是任意一个树的子结构）
+
+#### 问题分析
+
+学会把问题分解。对于这个问题，分成两个子问题：1. 遍历A树，看当前节点和B树的根节点是否相等，如果相等，继续看A当前节点的左右子树和B的左右子树**结构是否一样**，注意是结构是否一样而不是判断左右子树是否相等，因为题目问的是子结构，而不是子树。
+
+
+
+### 二叉树镜像
+
+#### 题目描述
+
+操作给定的二叉树，将其变换为源二叉树的镜像。
+
+#### 输入描述:
+
+```
+二叉树的镜像定义：源二叉树 
+    	    8
+    	   /  \
+    	  6   10
+    	 / \  / \
+    	5  7 9 11
+    	镜像二叉树
+    	    8
+    	   /  \
+    	  10   6
+    	 / \  / \
+    	11 9 7  5
+```
+
+#### 问题分析
+
+二叉树是一种递归结构，关于它的问题一般都是有框架可循的，无论是这道翻转二叉树还是上面的子结构。其框架大概是：
+
+> 当前节点做好当前节点的事，其他的交给递归。
+
+那么这道题也是一样，对于当前节点，交换一下左右指针就行，其他的交给递归。
+
+
+
+#### 代码
+
+```Java
+	/**
+public class TreeNode {
+    int val = 0;
+    TreeNode left = null;
+    TreeNode right = null;
+
+    public TreeNode(int val) {
+        this.val = val;
+
+    }
+
+}
+*/
+public class Solution {
+    public void Mirror(TreeNode root) {
+        if(root==null)
+            return ;
+        if(root!=null){
+            TreeNode temp = root.left ;
+            root.left= root.right; 
+            root.right = temp ;
+        }
+        Mirror(root.left) ;
+        Mirror(root.right) ;
+    }
+}
+```
+
+
+
+### 顺时针打印矩阵
+
+#### 题目描述
+
+输入一个矩阵，按照从外向里以顺时针的顺序依次打印出每一个数字，例如，如果输入如下4 X 4矩阵： 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 则依次打印出数字1,2,3,4,8,12,16,15,14,13,9,5,6,7,11,10.
+
+#### 问题分析
+
+整个过程分为四步，从左到右，从上到下，从右到左，从下到上。
+
+顺序是不变的，变的是上下左右的边界，比如第一次从左到右遍历完后，那么上界就增加了一，从上到下遍历完后，后界就缩小了一，以此类推。
+
+#### 代码
+
+```java
+import java.util.ArrayList;
+public class Solution {
+    public ArrayList<Integer> printMatrix(int [][] matrix) {
+       ArrayList res = new ArrayList() ;
+        int up = 0;
+        int down = matrix.length-1 ;
+        int left = 0 ;
+        int right = matrix[0].length-1 ;
+        while(true){
+            for(int col=left; col<=right; col++){
+                res.add(matrix[up][col]) ;
+            }
+            up++ ;
+            if(up>down)
+                break ;
+            for(int row=up; row<=down; row++){
+                res.add(matrix[row][right]);
+            }
+            right--;
+            if(right<left)
+                break ;
+            for(int col=right; col>=left; col--){
+                res.add(matrix[down][col]);
+            }
+            down-- ;
+            if(down<up)
+                break ;
+            for(int row=down; row>=up; row--){
+                res.add(matrix[row][left]) ;
+            }
+            left++ ;
+            if(left>right)
+                break ;
+        }
+        return res; 
+    }
+}
+```
+
+
+
+### 字符串的排列
+
+> 题解停更了很久，最近重新刷的时候感觉有些东西还是要总结，所以继续开始。
+
+#### 题目描述
+
+输入一个字符串,按字典序打印出该字符串中字符的所有排列。例如输入字符串abc,则打印出由字符a,b,c所能排列出来的所有字符串abc,acb,bac,bca,cab和cba。
+
+#### 问题分析
+
+这道题说到底，还是个回溯的问题，回溯解法之前也写到过，最需要注意一个问题，就是回溯完之后记得回退！这点很重要，具体回退的地方就在我们递归函数结束的下一行，这其实就是`labuladong`老哥讲的框架！框架！框架！八皇后问题也是回溯，都是有框架的。说到这里，安利一波公众号 `labuladong`, 以及[这篇](https://mp.weixin.qq.com/s/nMUHqvwzG2LmWA9jMIHwQQ)讲回溯的文章  ,其中还涉及到了八皇后问题，非常棒！
+
+然后目前下面的解法并不是最优解，因为有重复字符，所以我们可以考虑先把字符放在set里再操作，这样就可以减少重复执行的次数了。
+
+#### 代码
+
+```java
+import java.util.ArrayList;
+import java.util.TreeSet;
+
+public class Solution {
+//    private ArrayList<String> res = new ArrayList();
+    TreeSet<String> res = new TreeSet();
+    private StringBuilder ele = new StringBuilder();
+
+    public ArrayList<String> Permutation(String str) {
+        StringBuilder sb = new StringBuilder(str);
+        for(int i=0; i<sb.length(); i++){
+            traverse(sb,i);
+            ele.deleteCharAt(ele.length()-1);
+        }
+        return new ArrayList<>(res);
+    }
+
+    public void traverse(StringBuilder sbd, int loc){
+        char prefix = sbd.charAt(loc);
+        StringBuilder sb = new StringBuilder(sbd).deleteCharAt(loc);
+        if(sb.length()==0){
+            ele.append(prefix);
+            res.add(new String(ele));
+           // ele.deleteCharAt(ele.length()-1);    
+            return;
+        }
+        ele.append(prefix);
+        for(int i=0; i<sb.length(); i++){
+            traverse(sb,i);
+            ele.deleteCharAt(ele.length()-1);
+        }
+    }
+
+    public static void main(String[] args) {
+        ArrayList<String> res =new Solution().Permutation("aac");
+        for (String str:
+             res) {
+            System.out.println(str);
+        }
     }
 }
 ```
