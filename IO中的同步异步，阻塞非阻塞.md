@@ -29,7 +29,7 @@ categories: OS
 
 开局一张图：
 
-![AcroRd32_FAT9QJ8uGD.png](http://ww1.sinaimg.cn/large/005UcYzagy1ga451qpoikj30p40dcdhb.jpg)
+![d4A86s.png](https://s1.ax1x.com/2020/08/27/d4A86s.png)
 
 这里`recvfrom`是一个系统调用，当应用进程调用了这个系统调用后，当前进程从用户态切换到内核态，然后内核开始IO的第一阶段：等待数据。当数据准备好之后（比如从网络上接收到了完整的数据包），此时数据是在内核缓冲区的，然后操作系统会把数据从内核缓冲区复制到用户空间，并返回成功指示。
 
@@ -41,7 +41,7 @@ categories: OS
 
 继续上图：
 
-![AcroRd32_3DYB0dlHhK.png](http://ww1.sinaimg.cn/large/005UcYzagy1ga45h5qzymj30su0exgob.jpg)
+![d4ARAK.png](https://s1.ax1x.com/2020/08/27/d4ARAK.png)
 
 我们把非阻塞式IO和上面的阻塞式IO对比来看。对于阻塞式IO，在等待数据阶段，如果数据还没准备好，内核这边也不吭声，应用进程在那死等 （即阻塞应用进程），直到返回结果。
 
@@ -55,7 +55,7 @@ categories: OS
 
 IO multiplexing, 有些地方也叫 event driven IO. 其核心在于：使用单个进程就可可以同时处理多个网络连接的IO，它主要是基于`select`函数或者`poll`函数来实现的。
 
-![AcroRd32_W5THNghti5.png](http://ww1.sinaimg.cn/large/005UcYzagy1ga463h690qj30ro0emdig.jpg)
+![d40MUP.png](https://s1.ax1x.com/2020/08/27/d40MUP.png)
 
 基本原理是这样的：一个`select`函数它可以负责监控多个`socket`，准确的来说，我们可以调用`select`告知内核我们对哪些描述符（读、写或异常）感兴趣，然后`select`回去轮询我们感兴趣的这些事件，当其中的一个或者多个事件发生时，它就会告诉通知一下应用进程说：“嗨，你感兴趣的某某某出现了”。然后引用进程此时再发起系统调用`recvfrom`，此时就没有数据准备阶段了，而是直接数据拷贝，在此过程中应用进程依然阻塞。
 
