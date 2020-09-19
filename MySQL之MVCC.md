@@ -26,11 +26,11 @@ MVCC的核心有三：
 
 MySQL的每一行记录都有两个隐藏列，`DATA_TRX_ID`和``DATA_ROLL_PTR`。其中`DATA_TRX_ID`表示修改该行的事务ID,而`DATA_ROLL_PTR`则指向该行的历史修改，它把所有的历史修改连成一个链表，像这样
 
-![undefined](http://ww1.sinaimg.cn/large/005UcYzagy1galzmi3v8gj30qv0fb0sq.jpg)
+![wpl4mV.png](https://s1.ax1x.com/2020/09/02/wpl4mV.png)
 
 而Read View是什么呢？它也是一种数据结构，m_ids上面我们讲到不同的事务对同一行的操作形成了一个链表，那么我们在执行一条SQL时到底应该选择链表中的哪一条作为结果呢？Read View正是为了解决这个事情的。
 
-Read View里存放了我们当前活跃的事务的集合，当在不同的隔离级别下执行SQL时，通过检查版本链中的事务ID和Read View中的事务ID大小就可以决定要选择版本链中的哪个节点作为执行结果了。
+Read View里存放了我们当前活跃的事务的集合，所谓当前活跃，指的是这些事务还未被提交，当在不同的隔离级别下执行SQL时，通过检查版本链中的事务ID和Read View中的事务ID大小就可以决定要选择版本链中的哪个节点作为执行结果了。
 
 具体是这样的：
 
