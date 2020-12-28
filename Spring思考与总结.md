@@ -2,7 +2,20 @@
 title: Spring思考与总结
 date: 2020-03-19 22:44:20
 tag: Spring
+categories: 框架
 ---
+
+> 更新于2020-10-01
+
+从IoC的角度来说，spring是个容器，这个容器就是BeanFactory, 当然你说它是ApplicationContext也没有问题。容器是用来装东西的，装的东西就是我们定义的bean, 不过spring对它进行了封装，叫做BeanDefinition.
+
+所以spring初始化的过程中，首先会做这么几件事情：
+
+1. 创建容器
+2. 创建beandefinition
+3. 向容器里注册beandefinition
+
+***
 
 Spring是容器，最基本的容器是BeanFactory, 然后ApplicationContext又继承自它，但其实不能认为ApplicationContext是BeanFactory的实现类，因为事实是ApplicationContext内部持有了一个实例化的BeanFactory(DefaultListableBeanFactory).
 
