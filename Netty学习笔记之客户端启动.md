@@ -1,5 +1,6 @@
 ---
-titie: Netty学习笔记之客户端启动
+title: Netty学习笔记之客户端启动
+date: 2022-04-04 10:00:00
 categories: Java
 tags: Netty
 ---
