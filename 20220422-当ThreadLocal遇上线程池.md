@@ -2,6 +2,7 @@
 title: 当ThreadLocal遇上线程池
 categories: 多线程
 tags: 多线程
+date: 2022-04-30 12:00:00
 ---
 
 > 温馨提示: 本文需要垃圾回收、强弱引用、多线程等知识.

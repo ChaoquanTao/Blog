@@ -296,7 +296,7 @@ OK，大致来看，启动分为两个步骤，首先`initAndRegister`,然后进
     }
 ```
 
-可以看到，在`init`的时候，`pipeline`就添加一个`handler`,即`ChannelInitializer`,并覆盖了`initChannel`方法,所以启动后`pipelie`里除了`head`和`tail`之外，还有一个叫做`ChannelInitializer`的`handler`,一共三个`handler`。再回到代码②，代码②的最终功能就是去调用`ChannelInitializer`的`initChannel`方法,而这个`initChannle`里面，才是把我们定义的`handler`给加到`pipeline`里。
+可以看到，在`init`的时候，`pipeline`就添加一个`handler`,即`ChannelInitializer`,并覆盖了`initChannel`方法,所以启动后`pipelie`里除了`head`和`tail`之外，还有一个叫做`ChannelInitializer`的`handler`,一共三个`handler`。再回到代码②，代码②的最终功能就是去调用`ChannelInitializer`的`initChannel`方法,而这个`initChannle`里面，才是把我们在`serverbootstrap`里定义的`handler`给加到`pipeline`里,并在添加之后回调`handlerAdded`方法。
 
 <img src="http://tvax3.sinaimg.cn/large/006ImZ0Ogy1h0xz79wr5gj310c0kc122.jpg" alt="image" style="zoom:50%;" />
 
