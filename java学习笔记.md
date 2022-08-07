@@ -50,7 +50,7 @@ tags: java基础
       public static final int r =1;
       public abstract 返回值 方法名();
   }
-
+  
   ```
   也可以简单写为
 
@@ -158,7 +158,7 @@ tags: java基础
          先执行finally,再抛出异常 */
       /*finally语句通常不被遇到，一种典型使用情况是用来释放资源*/
   }
-
+  
   ```
 
   ```
@@ -244,13 +244,13 @@ tags: java基础
 
   ```
   package top.iamnewbie;
-
+  
   public class UseWaitAndNotify {
       public static void main(String[] args) {
           Object obj = new Object();
           Waiting waiting = new Waiting(obj);
           Notifier notifier = new Notifier(obj); //注意,这里使用同一对象初始化Waiting和Notifier
-
+  
           //因为Waiting和Notifier都实现了Runnable接口，所以可以用他们来初始化Thread类
           Thread thread1 = new Thread(waiting,"线程1");
           Thread thread2 = new Thread(notifier,"线程2");
@@ -260,11 +260,11 @@ tags: java基础
           thread2.start();
       }
   }
-
+  
   //它实现了Runnable接口，在Thread中将这个类的实例作为参数就可以创建线程
   class Waiting implements Runnable{
       private Object waitObj ;
-
+  
       public Waiting(Object obj) {
           this.waitObj = obj;
       }
@@ -283,10 +283,10 @@ tags: java基础
           System.out.println(Thread.currentThread().getName()+"被唤醒");
       }
   }
-
+  
   class  Notifier implements Runnable{
       private Object notifyObj ;
-
+  
       public Notifier(Object notifyObj) {
           this.notifyObj = notifyObj;
       }
@@ -553,11 +553,11 @@ java.util.ConcurrentModificationException
 #### 问题场景
 
 ```
-List<String> list = new ArrayList<String>(){{
-    add("this is");
-    add("a foreach");
-    add("example");
-}}
+List<String> list = new ArrayList<String>();
+    list.add("this is");
+    list.add("a foreach");
+    list.add("example");
+
 
 for(String str: list){
     if(str.equals("a foreach)){
