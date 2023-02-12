@@ -6,7 +6,7 @@ categories: Java
 
 ### 前言
 
-限流是微服务应用中一个老生常谈的话题，当A调B时，为了防止A的流量过大把B打垮，需要为B配置限流，限制上游应用对B的调用频率。关于限流算法，有漏铜算法、令牌桶算法、计数器算法、滑动窗口算法，本文不再赘述。本文主要讲解guava中的限流算法。
+限流是微服务应用中一个老生常谈的话题，当A调B时，为了防止A的流量过大把B打垮，需要为B配置限流，限制上游应用对B的调用频率。关于限流算法，有漏桶算法、令牌桶算法、计数器算法、滑动窗口算法，本文不再赘述。本文主要讲解guava中的限流算法。
 
 ### 用法
 
@@ -109,11 +109,27 @@ get token in 0.194899s
 
 所谓令牌桶算法，就是以固定的速率往一个桶里放令牌，当有请求来时，就从桶里取令牌，如果桶空了，就阻塞请求，直到桶里有令牌为止。按照令牌桶算法的思想，最直观的实现思路就是生产者消费者模型，专门起一个生产令牌的线程，以固定速率往集合（桶）里生产令牌。但如果这么做的话就会有些复杂，涉及到一些线程安全的操作。
 
-guava令牌桶的实现就比较巧妙了，将多线程的令牌操作换算成单线程的时间操作。由于生产令牌的速率是固定的，所以只要知道生产令牌的起止时间，就能算出这段时间里生产了多少令牌，每次当有请求到来时，计算下迄今一共存了多少令牌，如果令牌够用，则通过请求，更新剩余令牌数，否则，先赊账让当前请求通过，然后计算下次请求应该阻塞的最早时间。
+guava令牌桶的实现就比较巧妙了，**将多线程的令牌操作换算成单线程的时间操作**。由于生产令牌的速率是固定的，所以只要知道生产令牌的起止时间，就能算出这段时间里生产了多少令牌，每次当有请求到来时，计算下迄今一共存了多少令牌，如果令牌够用，则通过请求，更新剩余令牌数，否则，先赊账让当前请求通过，然后计算下次请求应该阻塞的最早时间。
 
-先来看下acquire方法：
+首先了解下ratelimiter里面几个很重要的变量
 
 ```java
+//SmoothRateLimiter.java
+//当前存储令牌数
+double storedPermits;
+//添加令牌时间间隔，如果qps是5，则时间间隔则为200ms，即每200ms获取一个令牌
+double stableIntervalMicros;
+
+//下一次请求可以获取令牌的起始时间
+//也就是上文提到的赊账机制，上次请求预消费令牌后
+//下次请求需要等待相应的时间到nextFreeTicketMicros时刻才可以获取令牌
+private long nextFreeTicketMicros = 0L;
+```
+
+先来看下`acquire`方法：
+
+```java
+//RateLimiter.java
 public double acquire(int permits) {
   long microsToWait = reserve(permits); //返回获取目标令牌数所需等待的时间
   stopwatch.sleepMicrosUninterruptibly(microsToWait);
@@ -124,6 +140,7 @@ public double acquire(int permits) {
 其中`reserve`方法返回获取目标令牌数所需等待的时间：
 
 ```java
+//RateLimiter.java
 final long reserve(int permits) {
   checkPermits(permits);
   synchronized (mutex()) {
@@ -133,6 +150,7 @@ final long reserve(int permits) {
 ```
 
 ```java
+//RateLimiter.java
 final long reserveAndGetWaitLength(int permits, long nowMicros) {
   long momentAvailable = reserveEarliestAvailable(permits, nowMicros);
   return max(momentAvailable - nowMicros, 0);
@@ -142,6 +160,7 @@ final long reserveAndGetWaitLength(int permits, long nowMicros) {
 接下来就是核心部分了：
 
 ```java
+//SmoothRateLimiter.java
 final long reserveEarliestAvailable(int requiredPermits, long nowMicros) {
    //刷新截止目前的令牌数 storedPermits 和下次能获取令牌的时间 nextFreeTicketMicros
   resync(nowMicros);
@@ -165,7 +184,7 @@ final long reserveEarliestAvailable(int requiredPermits, long nowMicros) {
 }
 ```
 
-同步nextFreeTicket
+同步`nextFreeTicket`
 
 ```java
 void resync(long nowMicros) {
@@ -180,13 +199,13 @@ void resync(long nowMicros) {
 
 下面通过一个小🌰来解释一下，在下图中，假设限流器限流为5ps, 即每200ms一个请求，当第一个请求在限流器启动时（即0s）时到来，这时候会直接通过，并计算允许下次请求通过的时间，由于此时是请求两个令牌，所以`nextFreeTicket`为2*200ms=400ms，在0-400ms期间到来的请求都会阻塞到400ms才允许通过，并再次更新`nextFreeTicket`.
 
-![ratemiliter](//tvax3.sinaimg.cn/large/008uWfc7gy1h7f9pdqfvpj30rd0dnwg0.jpg)
+![ratelimiter](//tvax3.sinaimg.cn/large/008uWfc7gy1h7f9pdqfvpj30rd0dnwg0.jpg)
 
 
 
 ### 写在最后
 
-这篇文章主要介绍了guava令牌桶算法的用法以及原理，文章只挑选了最核心的部分进行了介绍，关于guava ratelimiter, 除了文中介绍的应对突发流量的限流器外，还有平滑预热（warming up）限流，感兴趣的读者可以自行了解。
+这篇文章主要介绍了guava令牌桶算法的用法以及原理，文章只挑选了最核心的部分进行了介绍，关于guava ratelimiter, 除了文中介绍的应对突发流量的限流器外，还有平滑预热（warmingUp）限流，感兴趣的读者可以自行了解。
 
 从工程角度讲，上述限流器是一种单机限流，即只能针对单台机器生效，但真实环境中一个应用更多是集群部署，需要针对整个集群限流，比如让整个集群的qps小于某个阈值，这就需要用到集群限流，比如阿里巴巴开源的sentinel。
 
