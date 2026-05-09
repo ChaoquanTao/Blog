@@ -1,5 +1,6 @@
 ---
 title: 【git篇】聊一聊git rebase和git checkout
+date: 2024-05-01 12:00:00
 categories: git
 tag: git
 ---
