@@ -171,7 +171,10 @@
   解决方案是开启 Kubernetes 的 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">Static CPU Manager</span>。它的工作方式是：对于满足条件的 Pod，在启动时就把特定的物理 CPU 核心独占性地分配给它，其他 Pod 不能使用这些核心。
 </p>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// kubelet 配置</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicy: static</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">reservedSystemCPUs: "0,192,96,288"</p>
@@ -218,7 +221,10 @@
   仅仅分配独占核心还不够。本机有两个 NUMA 节点，如果 GPU 任务的 CPU 全集中在 NUMA0，会导致两个 NUMA 节点利用率严重不均，进而影响内存访问性能。
 </p>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// kubelet 配置</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicy: static</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicyOptions:</p>
@@ -385,7 +391,10 @@
   Linux 提供了 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">set_mempolicy</span> 系统调用，<span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">MPOL_INTERLEAVE</span> 模式会强制内核在分配内存页时交替使用所有指定的 NUMA 节点，而不是集中在当前 CPU 所在的节点。
 </p>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 在 CPU 任务启动命令前加上</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">numactl --interleave=all python cpu_task.py</p>
 </div>
@@ -394,7 +403,10 @@
   或者在代码中调用（注意：以下 syscall 号仅适用于 x86_64 Linux）：
 </p>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">import ctypes</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">libc = ctypes.CDLL("libc.so.6", use_errno=True)</p>
@@ -473,7 +485,10 @@
   最直接的想法：给 CPU 任务也绑核，让 CPU Manager 把两类任务分配到不同物理核。这正是我们最初的做法——CPU 任务和 GPU 任务都配置为 Guaranteed，并在 kubelet 中额外开启 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">full-pcpus-only</span>：
 </p>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicy: static</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicyOptions:</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;distribute-cpus-across-numa: "true"</p>
@@ -544,7 +559,10 @@
 <!-- 6.1 kubelet -->
 <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">6.1 kubelet 配置</p>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">apiVersion: kubelet.config.k8s.io/v1beta1</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">kind: KubeletConfiguration</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicy: static</p>
@@ -576,7 +594,10 @@
 <!-- 6.2 GPU 任务 -->
 <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">6.2 GPU 任务 Pod 配置</p>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// resources（Guaranteed QoS）</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">requests:</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;cpu: "192"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 16 的倍数，对齐 L3 边界</p>
@@ -586,7 +607,10 @@
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;memory: "1600Gi"</p>
 </div>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 启动命令（训练框架负责 NUMA 绑定）</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">numactl --cpunodebind=0 --membind=0 python train.py --rank 0</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">numactl --cpunodebind=1 --membind=1 python train.py --rank 1</p>
@@ -595,14 +619,20 @@
 <!-- 6.3 CPU 任务 -->
 <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">6.3 CPU 任务 Pod 配置</p>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// resources（Burstable QoS，不设 limits 或 limits > requests）</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">requests:</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;cpu: "90"</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;memory: "600Gi"</p>
 </div>
 
-<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+<div style="background:#0f172a;border-radius:8px;padding:0 16px 18px;margin:18px 0;">
+  <div style="padding:12px 0 10px;">
+    <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5f57;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#febc2e;margin-right:6px;"></span><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#28c840;"></span>
+  </div>
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 启动命令</p>
   <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">numactl --interleave=all python cpu_task.py</p>
 </div>
