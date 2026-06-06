@@ -173,8 +173,8 @@
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// kubelet 配置</p>
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">cpuManagerPolicy: static
-reservedSystemCPUs: "0,192,96,288"</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicy: static</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">reservedSystemCPUs: "0,192,96,288"</p>
 </div>
 
 <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
@@ -220,9 +220,9 @@ reservedSystemCPUs: "0,192,96,288"</pre>
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// kubelet 配置</p>
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">cpuManagerPolicy: static
-cpuManagerPolicyOptions:
-  distribute-cpus-across-numa: "true"</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicy: static</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicyOptions:</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;distribute-cpus-across-numa: "true"</p>
 </div>
 
 <div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
@@ -387,7 +387,7 @@ cpuManagerPolicyOptions:
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 在 CPU 任务启动命令前加上</p>
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">numactl --interleave=all python cpu_task.py</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">numactl --interleave=all python cpu_task.py</p>
 </div>
 
 <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
@@ -395,17 +395,17 @@ cpuManagerPolicyOptions:
 </p>
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">import ctypes
-
-libc = ctypes.CDLL("libc.so.6", use_errno=True)
-MPOL_INTERLEAVE = 3
-nodemask = (ctypes.c_ulong * 1)(0x3)  # nodes 0,1
-libc.syscall(
-    ctypes.c_long(238),  # SYS_set_mempolicy (x86_64)
-    ctypes.c_int(MPOL_INTERLEAVE),
-    ctypes.cast(nodemask, ctypes.c_void_p),
-    ctypes.c_ulong(3)
-)</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">import ctypes</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">libc = ctypes.CDLL("libc.so.6", use_errno=True)</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">MPOL_INTERLEAVE = 3</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">nodemask = (ctypes.c_ulong * 1)(0x3)&nbsp;&nbsp;# nodes 0,1</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">libc.syscall(</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;&nbsp;&nbsp;ctypes.c_long(238),&nbsp;&nbsp;# SYS_set_mempolicy (x86_64)</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;&nbsp;&nbsp;ctypes.c_int(MPOL_INTERLEAVE),</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;&nbsp;&nbsp;ctypes.cast(nodemask, ctypes.c_void_p),</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;&nbsp;&nbsp;ctypes.c_ulong(3)</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">)</p>
 </div>
 
 <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
@@ -474,10 +474,10 @@ libc.syscall(
 </p>
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">cpuManagerPolicy: static
-cpuManagerPolicyOptions:
-  distribute-cpus-across-numa: "true"
-  full-pcpus-only: "true"</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicy: static</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicyOptions:</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;distribute-cpus-across-numa: "true"</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;full-pcpus-only: "true"</p>
 </div>
 
 <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
@@ -545,15 +545,15 @@ cpuManagerPolicyOptions:
 <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">6.1 kubelet 配置</p>
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-cpuManagerPolicy: static
-cpuManagerPolicyOptions:
-  distribute-cpus-across-numa: "true"
-  full-pcpus-only: "true"
-reservedSystemCPUs: "0,192,96,288"
-memoryManagerPolicy: None
-topologyManagerPolicy: best-effort</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">apiVersion: kubelet.config.k8s.io/v1beta1</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">kind: KubeletConfiguration</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicy: static</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">cpuManagerPolicyOptions:</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;distribute-cpus-across-numa: "true"</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;full-pcpus-only: "true"</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">reservedSystemCPUs: "0,192,96,288"</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">memoryManagerPolicy: None</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">topologyManagerPolicy: best-effort</p>
 </div>
 
 <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
@@ -578,18 +578,18 @@ topologyManagerPolicy: best-effort</pre>
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// resources（Guaranteed QoS）</p>
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">requests:
-  cpu: "192"       # 16 的倍数，对齐 L3 边界
-  memory: "1600Gi"
-limits:
-  cpu: "192"       # requests == limits
-  memory: "1600Gi"</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">requests:</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;cpu: "192"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 16 的倍数，对齐 L3 边界</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;memory: "1600Gi"</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">limits:</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;cpu: "192"&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# requests == limits</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;memory: "1600Gi"</p>
 </div>
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 启动命令（训练框架负责 NUMA 绑定）</p>
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">numactl --cpunodebind=0 --membind=0 python train.py --rank 0
-numactl --cpunodebind=1 --membind=1 python train.py --rank 1</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">numactl --cpunodebind=0 --membind=0 python train.py --rank 0</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">numactl --cpunodebind=1 --membind=1 python train.py --rank 1</p>
 </div>
 
 <!-- 6.3 CPU 任务 -->
@@ -597,14 +597,14 @@ numactl --cpunodebind=1 --membind=1 python train.py --rank 1</pre>
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// resources（Burstable QoS，不设 limits 或 limits > requests）</p>
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">requests:
-  cpu: "90"
-  memory: "600Gi"</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">requests:</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;cpu: "90"</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">&nbsp;&nbsp;memory: "600Gi"</p>
 </div>
 
 <div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
   <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 启动命令</p>
-  <pre style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;overflow-x:auto;">numactl --interleave=all python cpu_task.py</pre>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;">numactl --interleave=all python cpu_task.py</p>
 </div>
 
 <!-- ========== 分割线 ========== -->
