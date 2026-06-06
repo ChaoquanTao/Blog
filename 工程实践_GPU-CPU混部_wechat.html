@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工程实践：实现单机 GPU/CPU 混部</title>
+</head>
+<body style="margin:0;padding:0;background:#ffffff;">
+<div style="max-width:680px;margin:0 auto;padding:0 16px;">
+
+<!-- ========== HERO ========== -->
+<div style="background:#0f172a;padding:52px 28px 44px;text-align:center;">
+  <div style="display:inline-block;font-size:11px;letter-spacing:0.12em;color:#818cf8;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);padding:5px 16px;border-radius:20px;margin-bottom:22px;">ENGINEERING PRACTICE</div>
+  <div style="height:10px;"></div>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:26px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">
+    实现单机 <span style="color:#818cf8;">GPU/CPU 混部</span>
+  </p>
+  <p style="font-size:13px;color:rgba(255,255,255,0.4);letter-spacing:0.06em;margin:0;line-height:1.7;">
+    NUMA · CPU Manager · 缓存隔离<br>一份完整的工程踩坑记录
+  </p>
+  <div style="width:36px;height:2px;background:#6366f1;margin:22px auto 0;"></div>
+</div>
+
+<!-- ========== 导语 Callout ========== -->
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">阅读收益</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">
+    读完之后，你会了解：GPU 训练任务的数据加载链路中哪些环节对 NUMA 敏感；为什么 Linux 的 First-Touch 内存策略在混部场景下会产生问题；CPU 缓存的 L3 共享边界在哪里，以及为什么给 CPU 任务"绑核"反而不如让它跑 Burstable；最终如何通过 Kubernetes CPU Manager、topology manager 以及应用层的 NUMA 策略，让两类任务在同一台机器上稳定共存。
+  </p>
+</div>
+
+<!-- ========== 01 背景 ========== -->
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid rgba(99,102,241,0.25);padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;vertical-align:middle;margin-right:10px;">01</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;vertical-align:middle;">背景</span>
+  <div style="margin-top:8px;border-bottom:2px solid #6366f1;"></div>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  我们有一批 GPU 训练机器，硬件配置相当豪华。以其中一台为例：
+</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">CPU</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">384 核（2 socket × 96 物理核 × 2 超线程）</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">内存</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">~2.2 TiB</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">GPU</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">8 张</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  部署训练任务之后，GPU 是满的，但 CPU 和内存还剩下相当大一部分。让这些资源闲置显然是浪费，于是我们开始考虑：能不能在同一台机器上跑一些 CPU 任务，把剩余资源利用起来？
+</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  听起来不复杂。实际做下来，踩了不少坑。
+</p>
+
+<!-- ========== 分割线 ========== -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ========== 02 核心约束 ========== -->
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid rgba(99,102,241,0.25);padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;vertical-align:middle;margin-right:10px;">02</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;vertical-align:middle;">核心约束：GPU 任务是一等公民</span>
+  <div style="margin-top:8px;border-bottom:2px solid #6366f1;"></div>
+</div>
+
+<div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">
+    混部最重要的原则只有一条：GPU 训练任务的性能不能因为 CPU 任务而下降。
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  一旦确立这条原则，问题就变得具体了。"CPU 任务影响 GPU 任务"可以通过以下几条路径发生：
+</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;">
+      <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;">
+        <span style="font-size:12px;font-weight:700;color:#ffffff;">1</span>
+      </div>
+    </td>
+    <td style="padding-left:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;">
+      <strong>CPU 争抢</strong>：CPU 任务占用了训练进程需要的 CPU 核，导致训练线程被调度出去。
+      </p>
+    </td>
+  </tr></table>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;">
+      <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;">
+        <span style="font-size:12px;font-weight:700;color:#ffffff;">2</span>
+      </div>
+    </td>
+    <td style="padding-left:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;">
+      <strong>内存争抢</strong>：CPU 任务占用了大量内存，或者导致内存在 NUMA 节点上分布不均，影响训练的内存访问性能。
+      </p>
+    </td>
+  </tr></table>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;">
+      <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;">
+        <span style="font-size:12px;font-weight:700;color:#ffffff;">3</span>
+      </div>
+    </td>
+    <td style="padding-left:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;">
+      <strong>缓存污染</strong>：CPU 任务频繁读写数据，把 GPU 训练进程的热数据从 CPU 缓存中驱逐出去。
+      </p>
+    </td>
+  </tr></table>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;">
+      <div style="width:24px;height:24px;background:#8b5cf6;border-radius:50%;text-align:center;line-height:24px;">
+        <span style="font-size:12px;font-weight:700;color:#ffffff;">4</span>
+      </div>
+    </td>
+    <td style="padding-left:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;">
+      <strong>PCIe 带宽争抢</strong>：如果 CPU 任务有大量磁盘 IO，且 NVMe 设备挂在与 GPU 同侧的 PCIe root complex 上，IO 流量可能与 GPU DMA 传输争抢 PCIe 带宽。这条路径在实践中影响较小，但在 IO 密集型 CPU 任务混部时值得关注。
+      </p>
+    </td>
+  </tr></table>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  前三个问题是我们实际遇到并解决的，下面逐一展开。
+</p>
+
+<!-- ========== 分割线 ========== -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ========== 03 CPU 分配 ========== -->
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid rgba(99,102,241,0.25);padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;vertical-align:middle;margin-right:10px;">03</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;vertical-align:middle;">CPU 分配</span>
+  <div style="margin-top:8px;border-bottom:2px solid #6366f1;"></div>
+</div>
+
+<!-- 3.1 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">3.1 Kubernetes CPU Manager</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  Kubernetes 默认的 CPU 调度是"共享"模式——所有容器的 CPU 时间由 kernel 统一调度，容器之间会相互抢占。这对于 GPU 训练任务是不可接受的，训练进程对 CPU 的延迟非常敏感，一旦被抢占，通信同步就会出现抖动。
+</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  解决方案是开启 Kubernetes 的 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">Static CPU Manager</span>。它的工作方式是：对于满足条件的 Pod，在启动时就把特定的物理 CPU 核心独占性地分配给它，其他 Pod 不能使用这些核心。
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// kubelet 配置</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;white-space:pre-wrap;">cpuManagerPolicy: static
+reservedSystemCPUs: "0,192,96,288"</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">reservedSystemCPUs</span> 必须配置，每个 NUMA 节点各保留一个完整物理核给系统进程。
+</p>
+
+<!-- 3.2 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">3.2 Guaranteed QoS：拿到独占核心的门票</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  不是所有 Pod 都能享受独占 CPU 核心。Static CPU Manager 只对 <strong>Guaranteed QoS</strong> 的 Pod 生效。Kubernetes 对 Pod 有三种 QoS 等级：
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;">
+  <tr>
+    <td style="padding:10px 13px;background:#0f172a;color:rgba(255,255,255,0.8);font-weight:500;font-size:13px;width:35%;">QoS 等级</td>
+    <td style="padding:10px 13px;background:#0f172a;color:rgba(255,255,255,0.8);font-weight:500;font-size:13px;">条件</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-weight:700;">Guaranteed</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;">requests == limits，且 CPU 和内存都设了值</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-weight:700;">Burstable</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;">设了 requests 但没有设 limits，或 requests != limits</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-weight:700;">BestEffort</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;">既没有 requests 也没有 limits</td>
+  </tr>
+</table>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  只有 Guaranteed Pod，CPU Manager 才会为其分配独占核心；Burstable 和 BestEffort Pod 的 CPU 仍然由 kernel 在"共享池"里调度。因此，我们将 GPU 训练任务和 CPU 任务都配置为 Guaranteed，让 CPU Manager 为它们分配互不重叠的核心。
+</p>
+
+<!-- 3.3 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">3.3 跨 NUMA 均匀分配</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  仅仅分配独占核心还不够。本机有两个 NUMA 节点，如果 GPU 任务的 CPU 全集中在 NUMA0，会导致两个 NUMA 节点利用率严重不均，进而影响内存访问性能。
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// kubelet 配置</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;white-space:pre-wrap;">cpuManagerPolicy: static
+cpuManagerPolicyOptions:
+  distribute-cpus-across-numa: "true"</p>
+</div>
+
+<div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">注意</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">
+    这个选项只在单个 NUMA 节点放不下所申请的 CPU 数时才生效。如果申请的 CPU 数在单个 NUMA 节点内就能满足，分配仍然会集中在一个节点上。对于本机每个 NUMA 节点有 95 个可用逻辑核的配置，GPU 任务申请超过 95 个核心时，这个选项才会起作用。
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  配置完成后，GPU 任务和 CPU 任务各自拿到互不重叠的 CPU 核心，GPU 训练线程不会被 CPU 任务抢占。
+</p>
+
+<!-- ========== 分割线 ========== -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ========== 04 内存分配 ========== -->
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid rgba(99,102,241,0.25);padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;vertical-align:middle;margin-right:10px;">04</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;vertical-align:middle;">内存分配</span>
+  <div style="margin-top:8px;border-bottom:2px solid #6366f1;"></div>
+</div>
+
+<!-- 4.1 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">4.1 NUMA 架构基础</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  在混部场景下，内存分配是否有问题，取决于任务本身的行为。要理解这个问题，需要先了解 NUMA 架构。本机的 NUMA 拓扑如下：
+</p>
+
+<!-- NUMA 拓扑图 -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+  <div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:12px 14px;margin-bottom:8px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 4px;">NUMA Node 0 (Socket 0)</p>
+    <p style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#64748b;margin:0;line-height:1.7;">物理核: 0~95 &nbsp;|&nbsp; 逻辑核: 0~95, 192~287<br>本地内存: ~1.1 TiB</p>
+  </div>
+  <p style="text-align:center;color:#6366f1;font-size:13px;margin:4px 0;font-weight:700;">↕ Infinity Fabric 总线</p>
+  <div style="background:#f0fdf4;border:1px solid rgba(34,197,94,0.3);border-radius:6px;padding:12px 14px;">
+    <p style="font-size:13px;font-weight:700;color:#16a34a;margin:0 0 4px;">NUMA Node 1 (Socket 1)</p>
+    <p style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#64748b;margin:0;line-height:1.7;">物理核: 96~191 &nbsp;|&nbsp; 逻辑核: 96~191, 288~383<br>本地内存: ~1.1 TiB</p>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  两个 NUMA 节点之间通过 <strong>Infinity Fabric 总线</strong>互联。当 NUMA0 上的 CPU 访问挂在 NUMA1 上的内存时，请求必须先经过 Infinity Fabric 跨越到对端 socket，再把数据传回来，延迟比访问本地内存高约 30%~40%，带宽也受互连吞吐上限制约。
+</p>
+
+<div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">
+    内存应该尽量分布在两个 NUMA 节点，让每个 rank 都能访问本地内存，而不是全堆在一侧、一半 rank 全走远端。
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  这里解释一下 <strong>rank</strong> 的概念。在分布式训练（如 PyTorch DDP）中，每张 GPU 对应一个独立的训练进程，这些进程通过 NCCL 等通信库协同完成梯度同步。每个进程都有一个唯一编号，称为 rank。8 卡训练中 rank 0–7 分别对应 GPU 0–7，彼此地位对等，共同维护一份模型参数的副本。
+</p>
+
+<!-- 4.2 训练任务的数据流 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">4.2 训练任务的数据流</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  在讨论内存分配问题之前，先梳理一次训练迭代里 CPU、内存和 GPU 的协作流程。
+</p>
+
+<!-- 步骤一 -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;">
+  <div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 4px;">① 主进程启动 DataLoader</p>
+    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.7;">
+      训练脚本调用 <span style="font-family:'Courier New',Courier,monospace;font-size:12px;background:#f0f0f8;color:#6366f1;padding:1px 4px;border-radius:3px;">DataLoader(dataset, num_workers=N, pin_memory=True)</span> 后，主进程 fork 出 N 个 worker 子进程。8 卡 DDP 中，每块 GPU 对应一个训练进程，整台机器上共有 8×N 个 DataLoader worker 同时运行。PyTorch 默认不做 CPU 亲和性绑定，worker 可能被调度到与 GPU 不同 NUMA 节点的核上。
+    </p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 4px;">② Worker 进程读取并预处理数据</p>
+    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.7;">
+      每个 worker 从 index queue 收取样本索引、从磁盘读取原始数据、在 CPU 上完成预处理。关键在于：数据从磁盘读入后，Linux 的 <strong>First-Touch</strong> 策略决定了这块内存落在哪个 NUMA 节点——由 worker 进程当前运行的 CPU 核所属的 NUMA 节点决定。
+    </p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 4px;">③ 通过共享内存将数据交给主进程</p>
+    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.7;">
+      PyTorch 使用 <span style="font-family:'Courier New',Courier,monospace;font-size:12px;background:#f0f0f8;color:#6366f1;padding:1px 4px;border-radius:3px;">/dev/shm</span> 共享内存而非管道拷贝：worker 将 tensor 底层存储映射到共享内存段，主进程通过 mmap 零拷贝获取。共享内存段的物理位置同样由 First-Touch 决定，通常在 worker 所在的 NUMA 节点上。
+    </p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#fff7ed;border:1px solid rgba(249,115,22,0.25);border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#ea580c;margin:0 0 4px;">④ pin_memory 线程拷贝到锁页内存</p>
+    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.7;">
+      主进程内的 <span style="font-family:'Courier New',Courier,monospace;font-size:12px;background:#f0f0f8;color:#ea580c;padding:1px 4px;border-radius:3px;">pin_memory_thread</span> 调用 <span style="font-family:'Courier New',Courier,monospace;font-size:12px;background:#f0f0f8;color:#ea580c;padding:1px 4px;border-radius:3px;">cudaHostAlloc()</span> 分配锁页内存。物理页仍遵循调用线程的 NUMA 策略——如果 pin_memory_thread 跑在 NUMA0，而 GPU 4 物理上连在 NUMA1 的 PCIe root complex 上，DMA 路径就变成跨 NUMA 的：NUMA0 锁页内存 → 跨 Infinity Fabric → NUMA1 PCIe → GPU4 HBM。
+    </p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#0f172a;border-radius:6px;padding:10px 14px;text-align:center;">
+    <p style="font-size:13px;font-weight:700;color:#ffffff;margin:0 0 4px;">⑤ 异步 DMA 传输到 GPU HBM</p>
+    <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0;line-height:1.7;">GPU DMA 引擎通过 PCIe 直接从锁页内存拉取数据到 HBM，不经过 CPU</p>
+  </div>
+</div>
+
+<!-- Pipeline 总结 -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 10px;">// 完整链路</p>
+  <p style="margin:0;line-height:2.4;">
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid rgba(99,102,241,0.25);">磁盘</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid rgba(99,102,241,0.25);">page cache</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid rgba(99,102,241,0.25);">共享内存</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#fff7ed;color:#ea580c;border:1px solid rgba(249,115,22,0.25);">锁页内存</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#0f172a;color:#ffffff;">GPU HBM</span>
+  </p>
+</div>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:32px;color:#6366f1;line-height:1;margin:0 0 6px;opacity:0.7;">"</p>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">任何一个环节出现跨 NUMA 访问，都会带来额外的 Infinity Fabric 流量和延迟。这就是为什么内存的 NUMA 分布不是一个无关紧要的细节。</p>
+</div>
+
+<!-- 4.3 ~ 4.5 三种情况 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">4.3 三种场景分析</p>
+
+<!-- 情况一 -->
+<div style="background:#fff1f2;border:1px solid rgba(244,63,94,0.2);border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">情况一：无框架优化的训练任务 — 有问题</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">
+    训练进程由主线程完成初始化，如果主线程运行在 NUMA0，几乎所有内存都会因 First-Touch 落在 NUMA0。后续跑在 NUMA1 上的线程访问这些内存，全走远端，性能打折。
+  </p>
+</div>
+
+<!-- 情况二 -->
+<div style="background:#f0fdf4;border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">情况二：有框架优化、无混部 — 没问题</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">
+    生产级训练框架在启动各 rank 时做 NUMA 绑定：<span style="font-family:'Courier New',Courier,monospace;font-size:12px;background:#f0f0f8;color:#16a34a;padding:1px 4px;border-radius:3px;">numactl --cpunodebind=0 --membind=0</span>，内存严格绑在本地节点，两侧各占一半，First-Touch 问题被彻底规避。
+  </p>
+</div>
+
+<!-- 情况三 -->
+<div style="background:#fff7ed;border:1px solid rgba(249,115,22,0.2);border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#ea580c;margin:0 0 6px;">情况三：有框架优化 + CPU 任务混部 — 取决于调度顺序</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">
+    GPU 任务先调度则无问题。但如果 CPU 任务先启动，其 600Gi 内存可能因 First-Touch 集中落在某一侧，导致 GPU 任务的 rank 在该侧内存不足，直接 OOM 或被迫跨 NUMA 分配。
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  调度顺序在 Kubernetes 环境下往往难以保证。Pod 重启、节点驱逐、滚动发布都可能打乱顺序。需要一个不依赖调度顺序的解法。
+</p>
+
+<!-- 4.7 解法 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">4.4 解法：给 CPU 任务加上 MPOL_INTERLEAVE</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  Linux 提供了 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">set_mempolicy</span> 系统调用，<span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">MPOL_INTERLEAVE</span> 模式会强制内核在分配内存页时交替使用所有指定的 NUMA 节点，而不是集中在当前 CPU 所在的节点。
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 在 CPU 任务启动命令前加上</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;">numactl --interleave=all python cpu_task.py</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  或者在代码中调用（注意：以下 syscall 号仅适用于 x86_64 Linux）：
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;white-space:pre-wrap;">import ctypes
+
+libc = ctypes.CDLL("libc.so.6", use_errno=True)
+MPOL_INTERLEAVE = 3
+nodemask = (ctypes.c_ulong * 1)(0x3)  # nodes 0,1
+libc.syscall(
+    ctypes.c_long(238),  # SYS_set_mempolicy (x86_64)
+    ctypes.c_int(MPOL_INTERLEAVE),
+    ctypes.cast(nodemask, ctypes.c_void_p),
+    ctypes.c_ulong(3)
+)</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  这样无论调度顺序如何，CPU 任务的内存都会均匀地分布在两个 NUMA 节点，不会独占任何一侧。实验验证，两侧 NUMA 内存比稳定在 1.00。GPU 任务本身不需要改动，框架的 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">numactl --membind</span> 绑定已经足够。
+</p>
+
+<!-- ========== 分割线 ========== -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ========== 05 缓存隔离 ========== -->
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid rgba(99,102,241,0.25);padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;vertical-align:middle;margin-right:10px;">05</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;vertical-align:middle;">缓存隔离</span>
+  <div style="margin-top:8px;border-bottom:2px solid #6366f1;"></div>
+</div>
+
+<!-- 5.1 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">5.1 CPU 缓存的层次与共享范围</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  现代高核数服务器 CPU（如 AMD EPYC）采用 Chiplet 架构，把 CPU 拆成多个小的裸片（die）再封装在一起。每个 <strong>Core Complex Die（CCD）</strong> 是一个独立的计算裸片，包含若干物理核心以及这些核心共享的 L3 缓存。以本机为例，每个 CCD 包含 8 个物理核心，共享一块 L3。一个 socket（96 核）由 12 个 CCD 拼成，两个 socket 共 24 个 CCD。
+</p>
+
+<!-- CCD 示意图 -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 10px;">// NUMA Node 0 (Socket 0) 局部</p>
+
+  <div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:10px 14px;margin-bottom:8px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 4px;">CCD 0 — 物理核 0~7</p>
+    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.7;">每核私有 L1 + L2 &nbsp;|&nbsp; 8 核共享 L3<br>每个物理核的 2 个逻辑核（超线程）共享同一组 L1/L2</p>
+  </div>
+  <div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:10px 14px;margin-bottom:8px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 4px;">CCD 1 — 物理核 8~15</p>
+    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.7;">独立的 L3，与 CCD 0 互不影响</p>
+  </div>
+  <p style="font-size:12px;color:#94a3b8;margin:0;text-align:center;">··· 共 12 个 CCD ···</p>
+</div>
+
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">核心结论</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">
+    L3 是 CCD 内的概念，不同 CCD 之间没有共享的 L3。L1/L2 每个物理核私有，同一物理核的两个超线程共享。
+  </p>
+</div>
+
+<!-- 5.2 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">5.2 缓存污染是怎么发生的</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">路径一：L1/L2 污染（最严重）</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">CPU 任务和 GPU 任务的线程运行在同一物理核的两个逻辑核上，共享 L1/L2。CPU 任务读写数据时，会把 GPU 任务的热数据驱逐出去，导致持续的 cache miss。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #e85d04;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">路径二：L3 污染</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">即使在不同物理核上，只要两类任务处于同一个 CCD（同 8 物理核），就共享 L3。大数据量读写同样会驱逐 GPU 任务的缓存行。</p>
+</div>
+
+<!-- 5.3 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">5.3 第一个思路：用 Guaranteed 绑核隔离</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  最直接的想法：给 CPU 任务也绑核，让 CPU Manager 把两类任务分配到不同物理核。这正是我们最初的做法——CPU 任务和 GPU 任务都配置为 Guaranteed，并在 kubelet 中额外开启 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">full-pcpus-only</span>：
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;white-space:pre-wrap;">cpuManagerPolicy: static
+cpuManagerPolicyOptions:
+  distribute-cpus-across-numa: "true"
+  full-pcpus-only: "true"</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0;text-align:justify;">
+  <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid rgba(99,102,241,0.15);">full-pcpus-only</span> 要求 CPU Manager 只分配完整的物理核——一个物理核的两个逻辑核必须同时分配给同一个 Pod。这样 L1/L2 污染的问题解决了。
+</p>
+
+<!-- 5.4 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">5.4 绑核之后，问题真的解决了吗？</p>
+
+<div style="background:#f0fdf4;border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">&#10003; L1/L2 污染</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">已解决。两类任务在不同物理核上。</p>
+</div>
+<div style="background:#fff1f2;border:1px solid rgba(244,63,94,0.2);border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">&#10007; L3 污染</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">仍然存在。CPU Manager 分配核心时并不保证按 L3 边界对齐。如果 GPU 任务拿到了物理核 0~6，CPU 任务拿到了 7~14，核 7 和核 8~14 就共享一个 L3。</p>
+</div>
+<div style="background:#fff1f2;border:1px solid rgba(244,63,94,0.2);border-radius:6px;padding:12px 16px;margin-bottom:20px;">
+  <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">&#10007; 资源浪费</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">Guaranteed 绑核的 CPU 任务，即使没在跑计算，核心和 L3 份额也被占用着。绑核是"重"的，并不是最优解。</p>
+</div>
+
+<!-- 5.5 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">5.5 最佳实践：Burstable CPU 任务 + L3 对齐</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  最终方案是换一个思路：
+</p>
+
+<div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">
+    CPU 任务改为 Burstable。GPU 任务的 CPU 数配置为 16 的倍数，对齐 L3 边界。
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  <strong>Burstable Pod 的优势</strong>：不会被 CPU Manager 分配独占核心，线程由 Linux kernel 在共享 CPU 池里调度。CPU 任务的线程随时可能被调度到其他核心，不会持续地向某个 L3 写数据。缓存影响是短暂、分散的，而不是持续、集中的。
+</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  <strong>L3 对齐</strong>：本机每 8 物理核（16 逻辑核）共享一个 L3。GPU 任务申请 16 的整数倍逻辑核时，CPU Manager 倾向于分配拓扑上连续的核心，在无碎片情况下通常与 CCD 边界自然对齐。但这不是硬性保证——如果有核心碎片化，分配结果可能跨 CCD。实际部署中，保持 GPU 任务最先调度可以让对齐更可靠。
+</p>
+
+<div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">关键机制</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">
+    Static CPU Manager 在为 Guaranteed Pod 分配独占核心时，会将这些核心从默认的共享 cpuset 中移除。Burstable Pod 的 cpuset 中根本不包含这些核心，kernel 无法将其线程调度到上面。这是硬性隔离，不是 kernel 的"倾向"。
+  </p>
+</div>
+
+<!-- ========== 分割线 ========== -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ========== 06 最终方案 ========== -->
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid rgba(99,102,241,0.25);padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;vertical-align:middle;margin-right:10px;">06</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;vertical-align:middle;">最终方案</span>
+  <div style="margin-top:8px;border-bottom:2px solid #6366f1;"></div>
+</div>
+
+<!-- 6.1 kubelet -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">6.1 kubelet 配置</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;white-space:pre-wrap;">apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cpuManagerPolicy: static
+cpuManagerPolicyOptions:
+  distribute-cpus-across-numa: "true"
+  full-pcpus-only: "true"
+reservedSystemCPUs: "0,192,96,288"
+memoryManagerPolicy: None
+topologyManagerPolicy: best-effort</p>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">static + distribute-cpus-across-numa</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">保证 Guaranteed Pod 独占核心，且核心均匀分布在两个 NUMA 节点</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">full-pcpus-only</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">以完整物理核为单位分配，杜绝 L1/L2 污染</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">memoryManagerPolicy: None</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">不让 Kubernetes 接管内存的 NUMA 分配，交给应用层自己处理</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #ea580c;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">topologyManagerPolicy: best-effort</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">没有使用更严格的 restricted，因为混部场景下多个 Guaranteed Pod 竞争拓扑资源时，restricted 策略会导致 Pod 准入失败</p>
+</div>
+
+<!-- 6.2 GPU 任务 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">6.2 GPU 任务 Pod 配置</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// resources（Guaranteed QoS）</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;white-space:pre-wrap;">requests:
+  cpu: "192"       # 16 的倍数，对齐 L3 边界
+  memory: "1600Gi"
+limits:
+  cpu: "192"       # requests == limits
+  memory: "1600Gi"</p>
+</div>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 启动命令（训练框架负责 NUMA 绑定）</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;white-space:pre-wrap;">numactl --cpunodebind=0 --membind=0 python train.py --rank 0
+numactl --cpunodebind=1 --membind=1 python train.py --rank 1</p>
+</div>
+
+<!-- 6.3 CPU 任务 -->
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#1e293b;line-height:1.5;margin:24px 0 12px;">6.3 CPU 任务 Pod 配置</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// resources（Burstable QoS，不设 limits 或 limits > requests）</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;white-space:pre-wrap;">requests:
+  cpu: "90"
+  memory: "600Gi"</p>
+</div>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.08em;margin:0 0 8px;">// 启动命令</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.9;margin:0;">numactl --interleave=all python cpu_task.py</p>
+</div>
+
+<!-- ========== 分割线 ========== -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ========== 07 总结 ========== -->
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid rgba(99,102,241,0.25);padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;vertical-align:middle;margin-right:10px;">07</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;vertical-align:middle;">总结</span>
+  <div style="margin-top:8px;border-bottom:2px solid #6366f1;"></div>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+  混部这件事，看起来是"把剩余资源利用起来"，实际上要对硬件架构有相当深入的理解才能做好。
+</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;">
+      <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;">
+        <span style="font-size:12px;font-weight:700;color:#ffffff;">1</span>
+      </div>
+    </td>
+    <td style="padding-left:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;">
+      <strong>CPU 隔离</strong>：用 Kubernetes Static CPU Manager + Guaranteed QoS 给 GPU 任务分配独占核心。<span style="font-family:'Courier New',Courier,monospace;font-size:12px;background:#f0f0f8;color:#6366f1;padding:1px 4px;border-radius:3px;">distribute-cpus-across-numa</span> 保证核心均匀分布在两个 NUMA 节点。
+      </p>
+    </td>
+  </tr></table>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;">
+      <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;">
+        <span style="font-size:12px;font-weight:700;color:#ffffff;">2</span>
+      </div>
+    </td>
+    <td style="padding-left:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;">
+      <strong>内存隔离</strong>：Kubernetes 的 Memory Manager 解决不了 Linux First-Touch 问题，必须在应用层介入。GPU 任务由训练框架做 NUMA 绑定；CPU 任务用 <span style="font-family:'Courier New',Courier,monospace;font-size:12px;background:#f0f0f8;color:#6366f1;padding:1px 4px;border-radius:3px;">MPOL_INTERLEAVE</span> 强制内存均匀分布。
+      </p>
+    </td>
+  </tr></table>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;">
+      <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;">
+        <span style="font-size:12px;font-weight:700;color:#ffffff;">3</span>
+      </div>
+    </td>
+    <td style="padding-left:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;">
+      <strong>缓存隔离</strong>：不要给 CPU 任务绑核——绑核解决了 L1/L2 问题，但引入了 L3 的持续占用。正确做法是让 CPU 任务保持 Burstable，同时 GPU 任务的 CPU 数配置为 16 的倍数，对齐 L3 边界。
+      </p>
+    </td>
+  </tr></table>
+</div>
+
+<!-- Closing -->
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0 0;text-align:center;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:rgba(255,255,255,0.75);line-height:2;margin:0;">
+  踩坑最深的地方是缓存隔离——<br>直到发现 Guaranteed CPU 任务在不重叠的核心上<br>仍然对训练有影响，<br>才意识到问题出在 L3 共享上。<br><br>
+  <strong style="color:#818cf8;">"绑核"看起来是正确答案，其实是个中间态。<br>让 CPU 任务变成 Burstable，反而是更好的选择。</strong>
+  </p>
+</div>
+
+<!-- Footer -->
+<div style="margin-top:44px;padding-top:18px;border-top:1px solid #e2e8f0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.8;">
+  GPU/CPU 混部 · NUMA · CPU Manager · 缓存隔离 · Kubernetes · PyTorch DDP
+  </p>
+</div>
+
+<div style="height:40px;"></div>
+
+</div>
+</body>
+</html>
