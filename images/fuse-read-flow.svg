@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 760" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <filter id="s" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <!-- 总标题 -->
+  <text x="480" y="38" text-anchor="middle" font-size="26" font-weight="bold" fill="#263238">一次 read() 的完整旅程：ext4 vs FUSE</text>
+
+  <!-- ========= 左侧: ext4 ========= -->
+  <rect x="20" y="60" width="430" height="680" rx="16" fill="#f5f5f5" stroke="#bdbdbd" stroke-width="1.5"/>
+  <text x="235" y="98" text-anchor="middle" font-size="24" font-weight="bold" fill="#37474f">普通 ext4</text>
+  <text x="235" y="126" text-anchor="middle" font-size="17" fill="#78909c">1 个进程 · 2 次模式切换</text>
+
+  <!-- Step 1 -->
+  <rect x="55" y="155" width="360" height="70" rx="10" fill="#e3f2fd" stroke="#42a5f5" stroke-width="2" filter="url(#s)"/>
+  <text x="70" y="185" font-size="17" fill="#90a4ae">❶</text>
+  <text x="100" y="185" font-size="18" font-weight="bold" fill="#1565c0">应用程序 (Ring 3)</text>
+  <text x="100" y="210" font-size="15" fill="#42a5f5">调用 read(fd, buf, size)</text>
+
+  <!-- 模式切换① -->
+  <rect x="150" y="235" width="170" height="34" rx="17" fill="#ff9800" opacity="0.9"/>
+  <text x="235" y="258" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">⚡ 模式切换 ①</text>
+  <line x1="235" y1="225" x2="235" y2="235" stroke="#ff9800" stroke-width="2.5"/>
+  <line x1="235" y1="269" x2="235" y2="285" stroke="#ff9800" stroke-width="2.5"/>
+
+  <!-- Step 2 -->
+  <rect x="55" y="285" width="360" height="90" rx="10" fill="#1a237e" stroke="#5c6bc0" stroke-width="2" filter="url(#s)"/>
+  <text x="70" y="322" font-size="17" fill="#7986cb">❷</text>
+  <text x="100" y="322" font-size="18" font-weight="bold" fill="#e8eaf6">ext4 内核模块 (Ring 0)</text>
+  <text x="100" y="348" font-size="15" fill="#9fa8da">直接碰硬盘，拿到数据</text>
+  <text x="100" y="368" font-size="14" fill="#7986cb">一步到位，没有中间商</text>
+
+  <!-- 模式切换② -->
+  <rect x="150" y="385" width="170" height="34" rx="17" fill="#ff9800" opacity="0.9"/>
+  <text x="235" y="408" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">⚡ 模式切换 ②</text>
+  <line x1="235" y1="375" x2="235" y2="385" stroke="#ff9800" stroke-width="2.5"/>
+  <line x1="235" y1="419" x2="235" y2="435" stroke="#ff9800" stroke-width="2.5"/>
+
+  <!-- Step 3 -->
+  <rect x="55" y="435" width="360" height="60" rx="10" fill="#e8f5e9" stroke="#66bb6a" stroke-width="2" filter="url(#s)"/>
+  <text x="70" y="465" font-size="17" fill="#81c784">❸</text>
+  <text x="100" y="465" font-size="18" font-weight="bold" fill="#2e7d32">应用程序拿到数据 ✓</text>
+  <text x="100" y="488" font-size="15" fill="#43a047">干净利落</text>
+
+  <!-- ext4 统计 -->
+  <rect x="50" y="530" width="370" height="105" rx="12" fill="#ffffff" stroke="#e0e0e0" stroke-width="1.5"/>
+  <text x="235" y="562" text-anchor="middle" font-size="19" font-weight="bold" fill="#37474f">开销统计</text>
+  <text x="80" y="592" font-size="17" fill="#546e7a">模式切换：<tspan font-weight="bold" fill="#2e7d32">2 次</tspan></text>
+  <text x="80" y="618" font-size="17" fill="#546e7a">进程切换：<tspan font-weight="bold" fill="#2e7d32">0 次</tspan></text>
+  <text x="265" y="592" font-size="17" fill="#546e7a">涉及进程：<tspan font-weight="bold" fill="#2e7d32">1 个</tspan></text>
+
+  <!-- ========= 右侧: FUSE ========= -->
+  <rect x="480" y="60" width="460" height="680" rx="16" fill="#fafafa" stroke="#bdbdbd" stroke-width="1.5"/>
+  <text x="710" y="98" text-anchor="middle" font-size="24" font-weight="bold" fill="#37474f">FUSE</text>
+  <text x="710" y="126" text-anchor="middle" font-size="15" fill="#78909c">2 个进程 · 4+ 次模式切换 · 2+ 次进程切换</text>
+
+  <!-- Step 1 -->
+  <rect x="505" y="148" width="410" height="52" rx="10" fill="#e3f2fd" stroke="#42a5f5" stroke-width="2" filter="url(#s)"/>
+  <text x="520" y="181" font-size="16" fill="#90a4ae">❶</text>
+  <text x="550" y="181" font-size="17" font-weight="bold" fill="#1565c0">应用程序 (Ring 3) 调用 read()</text>
+
+  <!-- 模式切换① -->
+  <rect x="630" y="207" width="160" height="30" rx="15" fill="#ff9800" opacity="0.85"/>
+  <text x="710" y="228" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">⚡ 模式切换 ①</text>
+  <line x1="710" y1="200" x2="710" y2="207" stroke="#ff9800" stroke-width="2"/>
+  <line x1="710" y1="237" x2="710" y2="248" stroke="#ff9800" stroke-width="2"/>
+
+  <!-- Step 2 -->
+  <rect x="505" y="248" width="410" height="52" rx="10" fill="#1b5e20" stroke="#66bb6a" stroke-width="2" filter="url(#s)"/>
+  <text x="520" y="280" font-size="16" fill="#a5d6a7">❷</text>
+  <text x="550" y="280" font-size="16" font-weight="bold" fill="#c8e6c9">FUSE 空壳 (Ring 0) 转发请求到 /dev/fuse</text>
+
+  <!-- 进程切换A -->
+  <rect x="630" y="307" width="160" height="30" rx="15" fill="#d32f2f" opacity="0.85"/>
+  <text x="710" y="328" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">🔄 进程切换 Ⓐ</text>
+  <line x1="710" y1="300" x2="710" y2="307" stroke="#d32f2f" stroke-width="2"/>
+  <line x1="710" y1="337" x2="710" y2="348" stroke="#d32f2f" stroke-width="2"/>
+
+  <!-- Step 3 -->
+  <rect x="505" y="348" width="410" height="72" rx="10" fill="#e3f2fd" stroke="#1565c0" stroke-width="2.5" filter="url(#s)"/>
+  <text x="520" y="378" font-size="16" fill="#90a4ae">❸</text>
+  <text x="550" y="378" font-size="17" font-weight="bold" fill="#0d47a1">Daemon (Ring 3) 执行真正的逻辑</text>
+  <text x="550" y="404" font-size="15" fill="#42a5f5">SSH 拉数据 / 解密 / 走云 API …</text>
+
+  <!-- 模式切换②③ -->
+  <rect x="630" y="427" width="160" height="30" rx="15" fill="#ff9800" opacity="0.85"/>
+  <text x="710" y="448" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">⚡ 模式切换 ②③</text>
+  <line x1="710" y1="420" x2="710" y2="427" stroke="#ff9800" stroke-width="2"/>
+  <line x1="710" y1="457" x2="710" y2="468" stroke="#ff9800" stroke-width="2"/>
+
+  <!-- Step 4 -->
+  <rect x="505" y="468" width="410" height="52" rx="10" fill="#1b5e20" stroke="#66bb6a" stroke-width="2" filter="url(#s)"/>
+  <text x="520" y="500" font-size="16" fill="#a5d6a7">❹</text>
+  <text x="550" y="500" font-size="16" font-weight="bold" fill="#c8e6c9">FUSE 空壳 (Ring 0) 收到结果，唤醒原程序</text>
+
+  <!-- 进程切换B + 模式切换④ -->
+  <rect x="575" y="527" width="130" height="30" rx="15" fill="#d32f2f" opacity="0.85"/>
+  <text x="640" y="548" text-anchor="middle" font-size="13" font-weight="bold" fill="#fff">🔄 进程切换 Ⓑ</text>
+  <rect x="715" y="527" width="130" height="30" rx="15" fill="#ff9800" opacity="0.85"/>
+  <text x="780" y="548" text-anchor="middle" font-size="13" font-weight="bold" fill="#fff">⚡ 模式切换 ④</text>
+  <line x1="710" y1="520" x2="710" y2="527" stroke="#d32f2f" stroke-width="2"/>
+  <line x1="710" y1="557" x2="710" y2="568" stroke="#d32f2f" stroke-width="2"/>
+
+  <!-- Step 5 -->
+  <rect x="505" y="568" width="410" height="52" rx="10" fill="#e8f5e9" stroke="#66bb6a" stroke-width="2" filter="url(#s)"/>
+  <text x="520" y="600" font-size="16" fill="#81c784">❺</text>
+  <text x="550" y="600" font-size="18" font-weight="bold" fill="#2e7d32">应用程序拿到数据 ✓</text>
+
+  <!-- FUSE 统计 -->
+  <rect x="500" y="645" width="420" height="80" rx="12" fill="#ffffff" stroke="#e0e0e0" stroke-width="1.5"/>
+  <text x="710" y="672" text-anchor="middle" font-size="19" font-weight="bold" fill="#37474f">开销统计</text>
+  <text x="525" y="698" font-size="16" fill="#546e7a">模式切换：<tspan font-weight="bold" fill="#d32f2f">4 次起跳</tspan></text>
+  <text x="525" y="720" font-size="16" fill="#546e7a">进程切换：<tspan font-weight="bold" fill="#d32f2f">≥ 2 次</tspan></text>
+  <text x="735" y="698" font-size="16" fill="#546e7a">涉及进程：<tspan font-weight="bold" fill="#d32f2f">2 个</tspan></text>
+  <text x="735" y="720" font-size="16" fill="#546e7a">数据拷贝：<tspan font-weight="bold" fill="#d32f2f">更多</tspan></text>
+
+  <!-- VS -->
+  <text x="465" y="390" text-anchor="middle" font-size="34" font-weight="bold" fill="#bdbdbd">VS</text>
+</svg>

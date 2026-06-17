@@ -1,0 +1,83 @@
+<svg viewBox="0 0 900 383" xmlns="http://www.w3.org/2000/svg" font-family="'PingFang SC','Microsoft YaHei',sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b5bff"/>
+      <stop offset="55%" stop-color="#5345f0"/>
+      <stop offset="100%" stop-color="#6a3df0"/>
+    </linearGradient>
+    <linearGradient id="rocketBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#dbe2ff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="900" height="383" fill="url(#bg)"/>
+
+  <!-- 装饰光晕 -->
+  <circle cx="730" cy="120" r="240" fill="url(#glow)"/>
+  <circle cx="120" cy="320" r="180" fill="url(#glow)"/>
+
+  <!-- 轨道环 -->
+  <g stroke="#ffffff" fill="none" opacity="0.14">
+    <ellipse cx="700" cy="200" rx="190" ry="80" stroke-width="1.5" transform="rotate(-18 700 200)"/>
+    <ellipse cx="700" cy="200" rx="135" ry="55" stroke-width="1.5" transform="rotate(-18 700 200)"/>
+  </g>
+
+  <!-- 星星点缀 -->
+  <g fill="#ffffff">
+    <circle cx="180" cy="70" r="2.4" opacity="0.9"/>
+    <circle cx="300" cy="120" r="1.8" opacity="0.6"/>
+    <circle cx="620" cy="60" r="2.2" opacity="0.8"/>
+    <circle cx="820" cy="300" r="2.6" opacity="0.85"/>
+    <circle cx="500" cy="330" r="1.8" opacity="0.55"/>
+    <circle cx="860" cy="150" r="1.8" opacity="0.6"/>
+  </g>
+  <g fill="#ffffff" opacity="0.95">
+    <path d="M250 250 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z"/>
+    <path d="M580 290 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 z" opacity="0.7"/>
+  </g>
+
+  <!-- 火箭 -->
+  <g transform="translate(648 132) rotate(35)">
+    <!-- 尾焰 -->
+    <path d="M-13 96 Q0 150 13 96 Q0 112 -13 96 Z" fill="#ffb347"/>
+    <path d="M-7 96 Q0 128 7 96 Q0 106 -7 96 Z" fill="#ff7849"/>
+    <!-- 机身 -->
+    <path d="M0 -54 C26 -22 24 50 16 92 L-16 92 C-24 50 -26 -22 0 -54 Z" fill="url(#rocketBody)"/>
+    <!-- 舷窗 -->
+    <circle cx="0" cy="6" r="12" fill="#3b5bff"/>
+    <circle cx="0" cy="6" r="6" fill="#9db4ff"/>
+    <!-- 尾翼 -->
+    <path d="M-16 56 C-34 66 -38 86 -34 96 L-16 88 Z" fill="#6a3df0"/>
+    <path d="M16 56 C34 66 38 86 34 96 L16 88 Z" fill="#6a3df0"/>
+  </g>
+
+  <!-- 顶部标签 -->
+  <g transform="translate(70 64)">
+    <rect x="0" y="0" width="168" height="30" rx="15" fill="#ffffff" opacity="0.18"/>
+    <text x="20" y="20" fill="#ffffff" font-size="14" font-weight="700" letter-spacing="3">WEEKLY TECH</text>
+  </g>
+
+  <!-- 主标题 -->
+  <text x="68" y="190" fill="#ffffff" font-size="76" font-weight="800" letter-spacing="2">本周科技要闻</text>
+
+  <!-- 日期 -->
+  <text x="72" y="244" fill="#ffffff" font-size="26" font-weight="700" letter-spacing="4" opacity="0.95">6.07 — 6.13</text>
+
+  <!-- 副标题 -->
+  <text x="72" y="284" fill="#ffffff" font-size="18" font-weight="500" letter-spacing="1" opacity="0.8">5 条要闻 · 3 分钟读完</text>
+
+  <!-- 五色圆点（呼应五条新闻配色） -->
+  <g transform="translate(73 318)">
+    <circle cx="0" cy="0" r="7" fill="#ef4444"/>
+    <circle cx="24" cy="0" r="7" fill="#2563eb"/>
+    <circle cx="48" cy="0" r="7" fill="#a855f7"/>
+    <circle cx="72" cy="0" r="7" fill="#22c55e"/>
+    <circle cx="96" cy="0" r="7" fill="#f97316"/>
+  </g>
+</svg>

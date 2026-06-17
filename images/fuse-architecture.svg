@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 750" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#546e7a"/>
+    </marker>
+    <marker id="arrGreen" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#2e7d32"/>
+    </marker>
+    <marker id="arrBlue" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#1565c0"/>
+    </marker>
+    <marker id="arrOrange" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#e65100"/>
+    </marker>
+    <filter id="sh" x="-2%" y="-2%" width="104%" height="104%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- 标题 -->
+  <text x="450" y="42" text-anchor="middle" font-size="26" font-weight="bold" fill="#263238">FUSE 核心架构：三个角色</text>
+
+  <!-- ===== 用户空间区域 ===== -->
+  <rect x="25" y="65" width="850" height="310" rx="16" fill="#e8f5e9" stroke="#a5d6a7" stroke-width="2" opacity="0.7"/>
+  <text x="55" y="98" font-size="20" font-weight="bold" fill="#2e7d32">用户空间 (Ring 3)</text>
+
+  <!-- 应用程序 -->
+  <rect x="55" y="120" width="280" height="110" rx="12" fill="#ffffff" stroke="#90caf9" stroke-width="2.5" filter="url(#sh)"/>
+  <text x="195" y="157" text-anchor="middle" font-size="21" font-weight="bold" fill="#1565c0">应用程序</text>
+  <text x="195" y="185" text-anchor="middle" font-size="17" fill="#78909c">cat / vim / grep / Python</text>
+  <text x="195" y="212" text-anchor="middle" font-size="15" fill="#90a4ae">只知道 read() / write()</text>
+
+  <!-- libfuse -->
+  <rect x="560" y="115" width="290" height="65" rx="10" fill="#fff8e1" stroke="#ffb300" stroke-width="2" filter="url(#sh)"/>
+  <text x="705" y="146" text-anchor="middle" font-size="19" font-weight="bold" fill="#f57f17">libfuse</text>
+  <text x="705" y="170" text-anchor="middle" font-size="15" fill="#f9a825">封装样板代码，你只需写回调</text>
+
+  <!-- FUSE daemon -->
+  <rect x="560" y="200" width="290" height="155" rx="12" fill="#e3f2fd" stroke="#42a5f5" stroke-width="3" filter="url(#sh)"/>
+  <text x="705" y="235" text-anchor="middle" font-size="22" font-weight="bold" fill="#0d47a1">③ FUSE Daemon</text>
+  <text x="705" y="263" text-anchor="middle" font-size="17" fill="#1565c0">"真逻辑" · 普通用户态进程</text>
+  <text x="705" y="292" text-anchor="middle" font-size="15" fill="#42a5f5">getattr() → 返回文件属性</text>
+  <text x="705" y="315" text-anchor="middle" font-size="15" fill="#42a5f5">read() → SSH拉数据 / 解密 / ...</text>
+  <text x="705" y="338" text-anchor="middle" font-size="15" fill="#42a5f5">write() → 加密上传 / ...</text>
+
+  <!-- libfuse → daemon 连接 -->
+  <line x1="705" y1="180" x2="705" y2="200" stroke="#f57f17" stroke-width="2"/>
+
+  <!-- ===== 分界线 ===== -->
+  <rect x="25" y="385" width="850" height="48" rx="0" fill="#fff3e0"/>
+  <line x1="25" y1="385" x2="875" y2="385" stroke="#ff9800" stroke-width="3" stroke-dasharray="10,5"/>
+  <line x1="25" y1="433" x2="875" y2="433" stroke="#ff9800" stroke-width="3" stroke-dasharray="10,5"/>
+  <text x="450" y="416" text-anchor="middle" font-size="18" font-weight="bold" fill="#e65100">系统调用边界（模式切换发生在这里）</text>
+
+  <!-- ===== 内核空间区域 ===== -->
+  <rect x="25" y="440" width="850" height="290" rx="16" fill="#e8eaf6" stroke="#9fa8da" stroke-width="2" opacity="0.7"/>
+  <text x="55" y="475" font-size="20" font-weight="bold" fill="#283593">内核空间 (Ring 0)</text>
+
+  <!-- VFS -->
+  <rect x="55" y="500" width="250" height="90" rx="12" fill="#311b92" stroke="#7c4dff" stroke-width="2" filter="url(#sh)"/>
+  <text x="180" y="538" text-anchor="middle" font-size="21" font-weight="bold" fill="#ede7f6">VFS 层</text>
+  <text x="180" y="566" text-anchor="middle" font-size="16" fill="#d1c4e9">虚拟文件系统 · "万能插座"</text>
+
+  <!-- /dev/fuse -->
+  <rect x="355" y="500" width="200" height="90" rx="12" fill="#e65100" stroke="#ff9800" stroke-width="2.5" filter="url(#sh)"/>
+  <text x="455" y="535" text-anchor="middle" font-size="21" font-weight="bold" fill="#ffffff">② /dev/fuse</text>
+  <text x="455" y="565" text-anchor="middle" font-size="16" fill="#ffe0b2">信使通道</text>
+
+  <!-- FUSE 内核模块 -->
+  <rect x="605" y="500" width="250" height="90" rx="12" fill="#1b5e20" stroke="#66bb6a" stroke-width="2.5" filter="url(#sh)"/>
+  <text x="730" y="535" text-anchor="middle" font-size="20" font-weight="bold" fill="#c8e6c9">① FUSE 内核模块</text>
+  <text x="730" y="565" text-anchor="middle" font-size="16" fill="#a5d6a7">"空壳"转发员 · 零业务逻辑</text>
+
+  <!-- 硬盘 -->
+  <rect x="55" y="625" width="250" height="75" rx="12" fill="#37474f" stroke="#78909c" stroke-width="2" filter="url(#sh)"/>
+  <text x="180" y="658" text-anchor="middle" font-size="19" font-weight="bold" fill="#eceff1">硬盘 / 硬件</text>
+  <text x="180" y="685" text-anchor="middle" font-size="14" fill="#b0bec5">只认编号格子，不懂"文件"</text>
+
+  <!-- ===== 连接箭头 ===== -->
+
+  <!-- 应用 → VFS (系统调用) -->
+  <path d="M 195 230 L 195 500" stroke="#546e7a" stroke-width="2.5" fill="none" marker-end="url(#arr)"/>
+  <text x="152" y="340" font-size="15" fill="#546e7a" transform="rotate(-90,152,340)">read() 系统调用</text>
+
+  <!-- VFS → FUSE 内核模块 -->
+  <path d="M 305 545 L 605 545" stroke="#2e7d32" stroke-width="2.5" fill="none" marker-end="url(#arrGreen)"/>
+  <text x="455" y="535" text-anchor="middle" font-size="14" fill="#2e7d32"> </text>
+
+  <!-- /dev/fuse → daemon (跨越边界) -->
+  <path d="M 455 500 L 455 433 L 560 277" stroke="#e65100" stroke-width="3" fill="none" marker-end="url(#arrOrange)" stroke-dasharray="7,4"/>
+  <text x="390" y="460" font-size="16" font-weight="bold" fill="#e65100">read()</text>
+  <text x="390" y="480" font-size="14" fill="#bf360c">daemon 取请求</text>
+
+  <!-- daemon → /dev/fuse (返回结果) -->
+  <path d="M 595 355 L 510 433 L 510 500" stroke="#1565c0" stroke-width="2.5" fill="none" marker-end="url(#arrBlue)" stroke-dasharray="7,4"/>
+  <text x="530" y="460" font-size="16" font-weight="bold" fill="#1565c0">write()</text>
+  <text x="530" y="480" font-size="14" fill="#1565c0">daemon 回结果</text>
+
+  <!-- VFS → 硬盘 -->
+  <path d="M 180 590 L 180 625" stroke="#546e7a" stroke-width="2" fill="none" marker-end="url(#arr)"/>
+</svg>

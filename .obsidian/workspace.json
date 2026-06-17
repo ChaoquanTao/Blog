@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "ab01e46818071d56",
+        "id": "2d8fddcafe86f5ae",
         "type": "tabs",
         "children": [
           {
-            "id": "ab8efe11204b759f",
+            "id": "87b8775ad59a8121",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "2026-06-04-工程实践：实现单机GPU-CPU混部.md",
+                "file": "20260616-FUSE：让文件系统工作在用户空间.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "2026-06-04-工程实践：实现单机GPU-CPU混部"
+              "title": "20260616-FUSE：让文件系统工作在用户空间"
             }
           }
         ]
@@ -183,8 +183,38 @@
       "bases:Create new base": false
     }
   },
-  "active": "ab8efe11204b759f",
+  "active": "87b8775ad59a8121",
   "lastOpenFiles": [
+    "FUSE_让文件系统工作在用户空间_wechat.html",
+    "20260613-本周科技要闻-20260613.md",
+    "20260616-FUSE：让文件系统工作在用户空间.md",
+    "fuse.md",
+    "20190709-谈一谈Java集合类之HashMap.md",
+    "20190904-谈一谈Java常量池之class常量池.md",
+    "20190905-谈一谈Java中的集合类.md",
+    "20221022-聊一聊限流之guava限流器.md",
+    "20230525-聊一聊linux中的tc命令.md",
+    "20220706-聊一聊DelayQueue.md",
+    "20190605-类加载机制.md",
+    "20190704-科学上网.md",
+    "20190112-直面Java.md",
+    "20191030-海量数据与空间限制面试题.md",
+    "20190408-数据库.md",
+    "20220430-当ThreadLocal遇上线程池.md",
+    "20191014-强化学习.md",
+    "20200915-容器学习笔记.md",
+    "20230312-如何理解Java中断.md",
+    "20230305-如何在Java中优雅地使用异常.md",
+    "20190915-剑指offer题解.md",
+    "20190704-关于synchronize关键字.md",
+    "20210606-关于Tomcat的Session管理.md",
+    "20200214-假如我是面试官.md",
+    "20200726-从集合类谈起.md",
+    "20260509-从第一性原理理解分布式训练.md",
+    "images/fuse-read-flow.svg",
+    "images/fuse-architecture.svg",
+    "images/fuse-kernel-userspace.svg",
+    "images",
     "工程实践_GPU-CPU混部_wechat_v2.html",
     "工程实践_GPU-CPU混部_wechat.html",
     "2026-06-04-工程实践：实现单机GPU-CPU混部.md.tmp.56457.827c9450505b",
@@ -193,11 +223,6 @@
     "2026-06-04-工程实践：实现单机GPU-CPU混部.md.tmp.56457.3feda99a4211",
     "2026-06-04-工程实践：实现单机GPU-CPU混部.md.tmp.56457.a23097af05a3",
     "2026-06-04-工程实践：实现单机GPU-CPU混部.md.tmp.56457.fa23dc4ba2eb",
-    "numa参考资料.md",
-    "2026-06-04-工程实践：实现单机GPU-CPU混部.md",
-    "工程实践：实现单机GPU-CPU混部.md",
-    "2026-05-29-一次Kubernetes升级引发的DevicePlugin注册失败.md",
-    "从第一性原理理解NUMA.md",
     "从第一性原理理解NUMA_wechat.html"
   ]
 }
