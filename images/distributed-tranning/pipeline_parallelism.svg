@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="-apple-system, 'Segoe UI', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .sub   { font-size: 18px; font-weight: 600; fill: #333; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .label { font-size: 15px; fill: #fff; font-weight: 700; }
+    .axis  { font-size: 16px; fill: #555; font-weight: 600; }
+    .small { font-size: 15px; fill: #555; }
+    .bubble{ fill: #eee; }
+    .fwd   { fill: #2e86c1; }
+    .bwd   { fill: #cb4335; }
+  </style>
+
+  <text x="600" y="38" text-anchor="middle" class="title">流水线并行：GPipe（朴素） vs 1F1B 调度</text>
+  <text x="600" y="64" text-anchor="middle" class="subtitle">4 张 GPU 持有 4 段 layers，纵向是 GPU，横向是时间</text>
+
+  <g transform="translate(80, 110)">
+    <text x="0" y="0" class="sub">① GPipe（先全部 forward，再全部 backward）—— 中间气泡很大</text>
+
+    <text x="-10" y="56" text-anchor="end" class="axis">GPU0</text>
+    <text x="-10" y="88" text-anchor="end" class="axis">GPU1</text>
+    <text x="-10" y="120" text-anchor="end" class="axis">GPU2</text>
+    <text x="-10" y="152" text-anchor="end" class="axis">GPU3</text>
+
+    <!-- GPU0 forwards -->
+    <rect x="0"   y="40" width="28" height="28" class="fwd"/><text x="14"  y="60" text-anchor="middle" class="label">F1</text>
+    <rect x="30"  y="40" width="28" height="28" class="fwd"/><text x="44"  y="60" text-anchor="middle" class="label">F2</text>
+    <rect x="60"  y="40" width="28" height="28" class="fwd"/><text x="74"  y="60" text-anchor="middle" class="label">F3</text>
+    <rect x="90"  y="40" width="28" height="28" class="fwd"/><text x="104" y="60" text-anchor="middle" class="label">F4</text>
+    <!-- GPU1 -->
+    <rect x="30"  y="72" width="28" height="28" class="fwd"/><text x="44"  y="92" text-anchor="middle" class="label">F1</text>
+    <rect x="60"  y="72" width="28" height="28" class="fwd"/><text x="74"  y="92" text-anchor="middle" class="label">F2</text>
+    <rect x="90"  y="72" width="28" height="28" class="fwd"/><text x="104" y="92" text-anchor="middle" class="label">F3</text>
+    <rect x="120" y="72" width="28" height="28" class="fwd"/><text x="134" y="92" text-anchor="middle" class="label">F4</text>
+    <!-- GPU2 -->
+    <rect x="60"  y="104" width="28" height="28" class="fwd"/><text x="74"  y="124" text-anchor="middle" class="label">F1</text>
+    <rect x="90"  y="104" width="28" height="28" class="fwd"/><text x="104" y="124" text-anchor="middle" class="label">F2</text>
+    <rect x="120" y="104" width="28" height="28" class="fwd"/><text x="134" y="124" text-anchor="middle" class="label">F3</text>
+    <rect x="150" y="104" width="28" height="28" class="fwd"/><text x="164" y="124" text-anchor="middle" class="label">F4</text>
+    <!-- GPU3 -->
+    <rect x="90"  y="136" width="28" height="28" class="fwd"/><text x="104" y="156" text-anchor="middle" class="label">F1</text>
+    <rect x="120" y="136" width="28" height="28" class="fwd"/><text x="134" y="156" text-anchor="middle" class="label">F2</text>
+    <rect x="150" y="136" width="28" height="28" class="fwd"/><text x="164" y="156" text-anchor="middle" class="label">F3</text>
+    <rect x="180" y="136" width="28" height="28" class="fwd"/><text x="194" y="156" text-anchor="middle" class="label">F4</text>
+
+    <!-- Big idle bubble -->
+    <rect x="210" y="40" width="120" height="124" class="bubble"/>
+    <text x="270" y="108" text-anchor="middle" class="small" fill="#777">气泡 (idle)</text>
+
+    <!-- Backward pass: starts on GPU3, propagates back -->
+    <rect x="330" y="136" width="34" height="28" class="bwd"/><text x="347" y="156" text-anchor="middle" class="label">B1</text>
+    <rect x="366" y="136" width="34" height="28" class="bwd"/><text x="383" y="156" text-anchor="middle" class="label">B2</text>
+    <rect x="402" y="136" width="34" height="28" class="bwd"/><text x="419" y="156" text-anchor="middle" class="label">B3</text>
+    <rect x="438" y="136" width="34" height="28" class="bwd"/><text x="455" y="156" text-anchor="middle" class="label">B4</text>
+
+    <rect x="366" y="104" width="34" height="28" class="bwd"/><text x="383" y="124" text-anchor="middle" class="label">B1</text>
+    <rect x="402" y="104" width="34" height="28" class="bwd"/><text x="419" y="124" text-anchor="middle" class="label">B2</text>
+    <rect x="438" y="104" width="34" height="28" class="bwd"/><text x="455" y="124" text-anchor="middle" class="label">B3</text>
+    <rect x="474" y="104" width="34" height="28" class="bwd"/><text x="491" y="124" text-anchor="middle" class="label">B4</text>
+
+    <rect x="402" y="72" width="34" height="28" class="bwd"/><text x="419" y="92" text-anchor="middle" class="label">B1</text>
+    <rect x="438" y="72" width="34" height="28" class="bwd"/><text x="455" y="92" text-anchor="middle" class="label">B2</text>
+    <rect x="474" y="72" width="34" height="28" class="bwd"/><text x="491" y="92" text-anchor="middle" class="label">B3</text>
+    <rect x="510" y="72" width="34" height="28" class="bwd"/><text x="527" y="92" text-anchor="middle" class="label">B4</text>
+
+    <rect x="438" y="40" width="34" height="28" class="bwd"/><text x="455" y="60" text-anchor="middle" class="label">B1</text>
+    <rect x="474" y="40" width="34" height="28" class="bwd"/><text x="491" y="60" text-anchor="middle" class="label">B2</text>
+    <rect x="510" y="40" width="34" height="28" class="bwd"/><text x="527" y="60" text-anchor="middle" class="label">B3</text>
+    <rect x="546" y="40" width="34" height="28" class="bwd"/><text x="563" y="60" text-anchor="middle" class="label">B4</text>
+
+    <!-- Edge bubbles -->
+    <rect x="0"   y="72"  width="28" height="28" class="bubble"/>
+    <rect x="0"   y="104" width="58" height="28" class="bubble"/>
+    <rect x="0"   y="136" width="88" height="28" class="bubble"/>
+
+    <text x="0" y="200" class="small">F = forward · B = backward · 灰块 = 设备空转</text>
+  </g>
+
+  <g transform="translate(80, 410)">
+    <text x="0" y="0" class="sub">② 1F1B（每做一个 forward 就尽快插入一个 backward）—— 显著缩短气泡</text>
+
+    <text x="-10" y="56" text-anchor="end" class="axis">GPU0</text>
+    <text x="-10" y="88" text-anchor="end" class="axis">GPU1</text>
+    <text x="-10" y="120" text-anchor="end" class="axis">GPU2</text>
+    <text x="-10" y="152" text-anchor="end" class="axis">GPU3</text>
+
+    <!-- GPU0 -->
+    <rect x="0"   y="40" width="28" height="28" class="fwd"/><text x="14"  y="60" text-anchor="middle" class="label">F1</text>
+    <rect x="30"  y="40" width="28" height="28" class="fwd"/><text x="44"  y="60" text-anchor="middle" class="label">F2</text>
+    <rect x="60"  y="40" width="28" height="28" class="fwd"/><text x="74"  y="60" text-anchor="middle" class="label">F3</text>
+    <rect x="90"  y="40" width="28" height="28" class="fwd"/><text x="104" y="60" text-anchor="middle" class="label">F4</text>
+    <rect x="120" y="40" width="34" height="28" class="bwd"/><text x="137" y="60" text-anchor="middle" class="label">B1</text>
+    <rect x="156" y="40" width="34" height="28" class="bwd"/><text x="173" y="60" text-anchor="middle" class="label">B2</text>
+    <rect x="192" y="40" width="34" height="28" class="bwd"/><text x="209" y="60" text-anchor="middle" class="label">B3</text>
+    <rect x="228" y="40" width="34" height="28" class="bwd"/><text x="245" y="60" text-anchor="middle" class="label">B4</text>
+
+    <!-- GPU1 -->
+    <rect x="30"  y="72" width="28" height="28" class="fwd"/><text x="44"  y="92" text-anchor="middle" class="label">F1</text>
+    <rect x="60"  y="72" width="28" height="28" class="fwd"/><text x="74"  y="92" text-anchor="middle" class="label">F2</text>
+    <rect x="90"  y="72" width="28" height="28" class="fwd"/><text x="104" y="92" text-anchor="middle" class="label">F3</text>
+    <rect x="120" y="72" width="34" height="28" class="bwd"/><text x="137" y="92" text-anchor="middle" class="label">B1</text>
+    <rect x="156" y="72" width="28" height="28" class="fwd"/><text x="170" y="92" text-anchor="middle" class="label">F4</text>
+    <rect x="186" y="72" width="34" height="28" class="bwd"/><text x="203" y="92" text-anchor="middle" class="label">B2</text>
+    <rect x="222" y="72" width="34" height="28" class="bwd"/><text x="239" y="92" text-anchor="middle" class="label">B3</text>
+    <rect x="258" y="72" width="34" height="28" class="bwd"/><text x="275" y="92" text-anchor="middle" class="label">B4</text>
+
+    <!-- GPU2 -->
+    <rect x="60"  y="104" width="28" height="28" class="fwd"/><text x="74"  y="124" text-anchor="middle" class="label">F1</text>
+    <rect x="90"  y="104" width="28" height="28" class="fwd"/><text x="104" y="124" text-anchor="middle" class="label">F2</text>
+    <rect x="120" y="104" width="34" height="28" class="bwd"/><text x="137" y="124" text-anchor="middle" class="label">B1</text>
+    <rect x="156" y="104" width="28" height="28" class="fwd"/><text x="170" y="124" text-anchor="middle" class="label">F3</text>
+    <rect x="186" y="104" width="34" height="28" class="bwd"/><text x="203" y="124" text-anchor="middle" class="label">B2</text>
+    <rect x="222" y="104" width="28" height="28" class="fwd"/><text x="236" y="124" text-anchor="middle" class="label">F4</text>
+    <rect x="252" y="104" width="34" height="28" class="bwd"/><text x="269" y="124" text-anchor="middle" class="label">B3</text>
+    <rect x="288" y="104" width="34" height="28" class="bwd"/><text x="305" y="124" text-anchor="middle" class="label">B4</text>
+
+    <!-- GPU3 -->
+    <rect x="90"  y="136" width="28" height="28" class="fwd"/><text x="104" y="156" text-anchor="middle" class="label">F1</text>
+    <rect x="120" y="136" width="34" height="28" class="bwd"/><text x="137" y="156" text-anchor="middle" class="label">B1</text>
+    <rect x="156" y="136" width="28" height="28" class="fwd"/><text x="170" y="156" text-anchor="middle" class="label">F2</text>
+    <rect x="186" y="136" width="34" height="28" class="bwd"/><text x="203" y="156" text-anchor="middle" class="label">B2</text>
+    <rect x="222" y="136" width="28" height="28" class="fwd"/><text x="236" y="156" text-anchor="middle" class="label">F3</text>
+    <rect x="252" y="136" width="34" height="28" class="bwd"/><text x="269" y="156" text-anchor="middle" class="label">B3</text>
+    <rect x="288" y="136" width="28" height="28" class="fwd"/><text x="302" y="156" text-anchor="middle" class="label">F4</text>
+    <rect x="318" y="136" width="34" height="28" class="bwd"/><text x="335" y="156" text-anchor="middle" class="label">B4</text>
+
+    <!-- Edge bubbles -->
+    <rect x="0"   y="72"  width="28" height="28" class="bubble"/>
+    <rect x="0"   y="104" width="58" height="28" class="bubble"/>
+    <rect x="0"   y="136" width="88" height="28" class="bubble"/>
+
+    <text x="0" y="200" class="small">关键洞察：尽早开始 backward，让前后段都"忙起来"，气泡随 micro-batch 数 / 流水段数 而下降</text>
+  </g>
+
+  <g transform="translate(80, 680)">
+    <line x1="0" y1="0" x2="1040" y2="0" stroke="#333" stroke-width="2" marker-end="url(#ah2)"/>
+    <text x="520" y="24" text-anchor="middle" class="small">时间 →</text>
+  </g>
+  <defs>
+    <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+  </defs>
+</svg>

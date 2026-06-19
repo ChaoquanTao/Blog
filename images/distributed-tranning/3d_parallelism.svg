@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="-apple-system, 'Segoe UI', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .sub   { font-size: 18px; font-weight: 600; fill: #333; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .label { font-size: 15px; fill: #fff; font-weight: 700; text-anchor: middle; }
+    .label-dark { font-size: 15px; fill: #1a5276; font-weight: 700; text-anchor: middle; }
+    .label-dark2 { font-size: 15px; fill: #7e5109; font-weight: 700; text-anchor: middle; }
+    .small { font-size: 16px; fill: #555; }
+    .axis-label { font-size: 18px; font-weight: 700; }
+    .gpu-cell { stroke: #333; stroke-width: 1.2; }
+  </style>
+
+  <text x="600" y="38" text-anchor="middle" class="title">3D 并行：把 DP × TP × PP 装进一个网格</text>
+  <text x="600" y="64" text-anchor="middle" class="subtitle">示例：32 张 GPU = 4 (DP) × 4 (TP) × 2 (PP)</text>
+
+  <g transform="translate(140, 130)">
+    <text x="-20" y="-20" class="axis-label" fill="#2874a6">TP →</text>
+    <text x="-78" y="120" class="axis-label" fill="#239b56" transform="rotate(-90 -78 120)">DP ↓</text>
+
+    <g>
+      <rect x="0"   y="0"  width="80" height="56" fill="#3498db" class="gpu-cell"/>
+      <rect x="80"  y="0"  width="80" height="56" fill="#3498db" class="gpu-cell"/>
+      <rect x="160" y="0"  width="80" height="56" fill="#3498db" class="gpu-cell"/>
+      <rect x="240" y="0"  width="80" height="56" fill="#3498db" class="gpu-cell"/>
+      <text x="160" y="34" class="label">DP-rank 0</text>
+
+      <rect x="0"   y="56" width="80" height="56" fill="#5dade2" class="gpu-cell"/>
+      <rect x="80"  y="56" width="80" height="56" fill="#5dade2" class="gpu-cell"/>
+      <rect x="160" y="56" width="80" height="56" fill="#5dade2" class="gpu-cell"/>
+      <rect x="240" y="56" width="80" height="56" fill="#5dade2" class="gpu-cell"/>
+      <text x="160" y="90" class="label">DP-rank 1</text>
+
+      <rect x="0"   y="112" width="80" height="56" fill="#85c1e9" class="gpu-cell"/>
+      <rect x="80"  y="112" width="80" height="56" fill="#85c1e9" class="gpu-cell"/>
+      <rect x="160" y="112" width="80" height="56" fill="#85c1e9" class="gpu-cell"/>
+      <rect x="240" y="112" width="80" height="56" fill="#85c1e9" class="gpu-cell"/>
+      <text x="160" y="146" class="label-dark">DP-rank 2</text>
+
+      <rect x="0"   y="168" width="80" height="56" fill="#aed6f1" class="gpu-cell"/>
+      <rect x="80"  y="168" width="80" height="56" fill="#aed6f1" class="gpu-cell"/>
+      <rect x="160" y="168" width="80" height="56" fill="#aed6f1" class="gpu-cell"/>
+      <rect x="240" y="168" width="80" height="56" fill="#aed6f1" class="gpu-cell"/>
+      <text x="160" y="202" class="label-dark">DP-rank 3</text>
+    </g>
+
+    <text x="160" y="260" text-anchor="middle" class="sub" fill="#2874a6">PP-stage 0：layers 1~12</text>
+  </g>
+
+  <g transform="translate(620, 130)">
+    <g>
+      <rect x="0"   y="0"  width="80" height="56" fill="#e67e22" class="gpu-cell"/>
+      <rect x="80"  y="0"  width="80" height="56" fill="#e67e22" class="gpu-cell"/>
+      <rect x="160" y="0"  width="80" height="56" fill="#e67e22" class="gpu-cell"/>
+      <rect x="240" y="0"  width="80" height="56" fill="#e67e22" class="gpu-cell"/>
+      <text x="160" y="34" class="label">DP-rank 0</text>
+
+      <rect x="0"   y="56" width="80" height="56" fill="#eb984e" class="gpu-cell"/>
+      <rect x="80"  y="56" width="80" height="56" fill="#eb984e" class="gpu-cell"/>
+      <rect x="160" y="56" width="80" height="56" fill="#eb984e" class="gpu-cell"/>
+      <rect x="240" y="56" width="80" height="56" fill="#eb984e" class="gpu-cell"/>
+      <text x="160" y="90" class="label">DP-rank 1</text>
+
+      <rect x="0"   y="112" width="80" height="56" fill="#f0b27a" class="gpu-cell"/>
+      <rect x="80"  y="112" width="80" height="56" fill="#f0b27a" class="gpu-cell"/>
+      <rect x="160" y="112" width="80" height="56" fill="#f0b27a" class="gpu-cell"/>
+      <rect x="240" y="112" width="80" height="56" fill="#f0b27a" class="gpu-cell"/>
+      <text x="160" y="146" class="label-dark2">DP-rank 2</text>
+
+      <rect x="0"   y="168" width="80" height="56" fill="#f5cba7" class="gpu-cell"/>
+      <rect x="80"  y="168" width="80" height="56" fill="#f5cba7" class="gpu-cell"/>
+      <rect x="160" y="168" width="80" height="56" fill="#f5cba7" class="gpu-cell"/>
+      <rect x="240" y="168" width="80" height="56" fill="#f5cba7" class="gpu-cell"/>
+      <text x="160" y="202" class="label-dark2">DP-rank 3</text>
+    </g>
+
+    <text x="160" y="260" text-anchor="middle" class="sub" fill="#b9770e">PP-stage 1：layers 13~24</text>
+  </g>
+
+  <g>
+    <line x1="475" y1="240" x2="610" y2="240" stroke="#555" stroke-width="3" marker-end="url(#ah5)"/>
+    <text x="542" y="225" text-anchor="middle" class="small">activations</text>
+    <text x="542" y="262" text-anchor="middle" class="small">通过 PP 通信</text>
+  </g>
+  <defs>
+    <marker id="ah5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <g transform="translate(140, 480)">
+    <text x="0" y="0" class="sub">三种通信群（每张 GPU 同时属于三个）</text>
+
+    <text x="0" y="34" class="small"><tspan fill="#2874a6" font-weight="700">▸ TP 通信群</tspan>：4 张/组 × 8 组 — 每个 layer 内的 AllReduce（高频、带宽密集，放机内 NVLink）</text>
+    <text x="0" y="64" class="small"><tspan fill="#239b56" font-weight="700">▸ DP 通信群</tspan>：4 张/组 × 8 组 — 每步梯度 AllReduce（中频、可异步重叠）</text>
+    <text x="0" y="94" class="small"><tspan fill="#b9770e" font-weight="700">▸ PP 通信群</tspan>：2 张/组 × 16 组 — 仅在 stage 边界传 activations（低频、点对点）</text>
+
+    <text x="0" y="138" class="small" fill="#666">→ 把通信最重的 TP 放最快互联里，最轻的 PP 放最慢链路上，是"3D 并行"工程上的核心拓扑原则。</text>
+  </g>
+</svg>

@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="-apple-system, 'Segoe UI', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .sub   { font-size: 19px; font-weight: 600; fill: #333; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .label { font-size: 18px; fill: #222; }
+    .small { font-size: 15px; fill: #555; }
+    .matA { fill: #d6eaf8; stroke: #2874a6; stroke-width: 1.5; }
+    .matB { fill: #fadbd8; stroke: #b03a2e; stroke-width: 1.5; }
+    .matY { fill: #d5f5e3; stroke: #239b56; stroke-width: 1.5; }
+    .gpu  { fill: none; stroke: #888; stroke-dasharray: 5,3; stroke-width: 1.5; }
+  </style>
+
+  <text x="600" y="38" text-anchor="middle" class="title">Megatron 式 MLP 张量并行：列并行 → 行并行 一气呵成</text>
+  <text x="600" y="64" text-anchor="middle" class="subtitle">Y = GeLU(X · A) · B  ——  把 A 按列切，B 按行切，中间无需通信</text>
+
+  <g transform="translate(50, 110)">
+    <text x="0" y="0" class="sub">① Column-Parallel：A = [A₁ | A₂]</text>
+
+    <rect x="0" y="30" width="80" height="110" class="matA"/>
+    <text x="40" y="92" text-anchor="middle" class="label">X</text>
+    <text x="40" y="160" text-anchor="middle" class="small">每卡相同</text>
+
+    <text x="98" y="92" class="label">·</text>
+
+    <rect x="115" y="30" width="55" height="110" class="matA"/>
+    <text x="142" y="92" text-anchor="middle" class="label">A₁</text>
+
+    <rect x="178" y="30" width="55" height="110" class="matA"/>
+    <text x="205" y="92" text-anchor="middle" class="label">A₂</text>
+
+    <text x="248" y="92" class="label">=</text>
+
+    <rect x="265" y="30" width="55" height="110" class="matY"/>
+    <text x="292" y="92" text-anchor="middle" class="label">Y₁</text>
+
+    <rect x="328" y="30" width="55" height="110" class="matY"/>
+    <text x="355" y="92" text-anchor="middle" class="label">Y₂</text>
+
+    <text x="0" y="195" class="small">A 按"列"切到 2 张 GPU，每卡只算自己那一列 → 输出 Y 也天然按列切开</text>
+  </g>
+
+  <g>
+    <rect x="160" y="288" width="62" height="22" class="gpu"/>
+    <text x="191" y="305" text-anchor="middle" class="small" fill="#888">GPU0</text>
+    <rect x="223" y="288" width="62" height="22" class="gpu"/>
+    <text x="254" y="305" text-anchor="middle" class="small" fill="#888">GPU1</text>
+  </g>
+
+  <g transform="translate(50, 380)">
+    <text x="0" y="0" class="sub">② GeLU 后 Row-Parallel：B = [B₁ ; B₂]ᵀ → AllReduce(Y₁B₁ + Y₂B₂)</text>
+
+    <rect x="0" y="30" width="55" height="110" class="matY"/>
+    <text x="27" y="92" text-anchor="middle" class="label">Y₁</text>
+    <rect x="63" y="30" width="55" height="110" class="matY"/>
+    <text x="90" y="92" text-anchor="middle" class="label">Y₂</text>
+
+    <text x="135" y="92" class="label">·</text>
+
+    <rect x="155" y="30" width="80" height="55" class="matB"/>
+    <text x="195" y="65" text-anchor="middle" class="label">B₁</text>
+    <rect x="155" y="85" width="80" height="55" class="matB"/>
+    <text x="195" y="120" text-anchor="middle" class="label">B₂</text>
+
+    <text x="252" y="92" class="label">=</text>
+
+    <rect x="275" y="30" width="80" height="110" fill="#fcf3cf" stroke="#b9770e" stroke-width="1.5"/>
+    <text x="315" y="80" text-anchor="middle" class="label">Y₁B₁</text>
+    <text x="315" y="115" text-anchor="middle" class="small">(GPU0)</text>
+
+    <rect x="370" y="30" width="80" height="110" fill="#fcf3cf" stroke="#b9770e" stroke-width="1.5"/>
+    <text x="410" y="80" text-anchor="middle" class="label">Y₂B₂</text>
+    <text x="410" y="115" text-anchor="middle" class="small">(GPU1)</text>
+
+    <text x="475" y="98" class="label" font-size="32">⊕</text>
+    <text x="490" y="160" text-anchor="middle" class="small" fill="#b03a2e" font-weight="600">AllReduce</text>
+
+    <rect x="535" y="30" width="90" height="110" fill="#d4efdf" stroke="#1e8449" stroke-width="2.5"/>
+    <text x="580" y="92" text-anchor="middle" class="label" font-weight="700">Y (完整)</text>
+  </g>
+
+  <g transform="translate(720, 110)">
+    <rect x="0" y="0" width="430" height="490" rx="10" fill="#fafafa" stroke="#ccc" stroke-width="1.5"/>
+    <text x="215" y="40" text-anchor="middle" class="sub">为什么这样切聪明？</text>
+
+    <text x="20" y="84" class="label">▸ A 按列切：每卡独立算一段</text>
+    <text x="20" y="112" class="small" fill="#555">无需中间通信</text>
+
+    <text x="20" y="160" class="label">▸ B 按行切：分块乘后 ⊕ 求和</text>
+    <text x="20" y="188" class="small" fill="#555">恰好一次 AllReduce 就拿到完整 Y</text>
+
+    <text x="20" y="236" class="label">▸ 通信只发生在 MLP 末尾</text>
+    <text x="20" y="264" class="small" fill="#555">forward 1 次 + backward 1 次</text>
+
+    <text x="20" y="318" class="sub" fill="#b03a2e">代价</text>
+    <text x="20" y="350" class="small" fill="#555">每个 batch 都要做 AllReduce，</text>
+    <text x="20" y="374" class="small" fill="#555">通信量正比于 hidden_size，</text>
+    <text x="20" y="398" class="small" fill="#555">对带宽敏感 → 通常只在 NVLink</text>
+    <text x="20" y="422" class="small" fill="#555">这种机内高速互联里跑 TP。</text>
+
+    <text x="20" y="468" class="small" fill="#666">Self-Attention 的 QKV 投影同理</text>
+  </g>
+</svg>

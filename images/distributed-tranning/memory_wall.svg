@@ -1,0 +1,96 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 620" font-family="-apple-system, 'Segoe UI', sans-serif">
+  <style>
+    .axis { stroke: #555; stroke-width: 2; fill: none; }
+    .grid { stroke: #ddd; stroke-width: 1; stroke-dasharray: 4,4; }
+    .label { font-size: 18px; fill: #333; }
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .legend { font-size: 18px; fill: #333; }
+    .model-line { fill: none; stroke: #d9534f; stroke-width: 3.5; }
+    .gpu-line   { fill: none; stroke: #337ab7; stroke-width: 3.5; }
+    .point { stroke-width: 1.5; }
+    .annot { font-size: 16px; fill: #555; }
+  </style>
+
+  <text x="570" y="42" text-anchor="middle" class="title">模型参数量 vs. 单卡显存（指数坐标，示意）</text>
+
+  <line x1="120" y1="540" x2="1080" y2="540" class="axis"/>
+  <line x1="120" y1="80"  x2="120"  y2="540" class="axis"/>
+
+  <g class="label" text-anchor="end">
+    <line x1="116" y1="510" x2="124" y2="510" class="axis"/>
+    <text x="110" y="516">1 GB</text>
+
+    <line x1="116" y1="408" x2="124" y2="408" class="axis"/>
+    <text x="110" y="414">10 GB</text>
+    <line x1="120" y1="408" x2="1080" y2="408" class="grid"/>
+
+    <line x1="116" y1="306" x2="124" y2="306" class="axis"/>
+    <text x="110" y="312">100 GB</text>
+    <line x1="120" y1="306" x2="1080" y2="306" class="grid"/>
+
+    <line x1="116" y1="204" x2="124" y2="204" class="axis"/>
+    <text x="110" y="210">1 TB</text>
+
+    <line x1="116" y1="102" x2="124" y2="102" class="axis"/>
+    <text x="110" y="108">10 TB</text>
+    <line x1="120" y1="102" x2="1080" y2="102" class="grid"/>
+  </g>
+
+  <g class="label" text-anchor="middle">
+    <text x="240" y="568">2018</text>
+    <text x="420" y="568">2020</text>
+    <text x="600" y="568">2022</text>
+    <text x="780" y="568">2024</text>
+    <text x="960" y="568">2026</text>
+  </g>
+
+  <polyline class="model-line"
+    points="240,500 345,448 450,372 570,254 690,180 840,135 990,114"/>
+  <g>
+    <circle cx="240" cy="500" r="6" fill="#d9534f" class="point"/>
+    <circle cx="450" cy="372" r="6" fill="#d9534f" class="point"/>
+    <circle cx="570" cy="254" r="6" fill="#d9534f" class="point"/>
+    <circle cx="690" cy="180" r="6" fill="#d9534f" class="point"/>
+    <circle cx="840" cy="135" r="6" fill="#d9534f" class="point"/>
+    <circle cx="990" cy="114" r="6" fill="#d9534f" class="point"/>
+  </g>
+  <g class="annot">
+    <text x="252" y="495">BERT 110M</text>
+    <text x="462" y="370">GPT-2 1.5B</text>
+    <text x="582" y="252">GPT-3 175B</text>
+    <text x="702" y="178">PaLM 540B</text>
+    <text x="780" y="120">万亿参数级</text>
+  </g>
+
+  <polyline class="gpu-line"
+    points="240,440 420,418 600,372 780,354 960,336"/>
+  <g>
+    <circle cx="240" cy="440" r="6" fill="#337ab7" class="point"/>
+    <circle cx="420" cy="418" r="6" fill="#337ab7" class="point"/>
+    <circle cx="600" cy="372" r="6" fill="#337ab7" class="point"/>
+    <circle cx="780" cy="354" r="6" fill="#337ab7" class="point"/>
+    <circle cx="960" cy="336" r="6" fill="#337ab7" class="point"/>
+  </g>
+  <g class="annot">
+    <text x="219" y="465">V100 16GB</text>
+    <text x="429" y="442">V100 32GB</text>
+    <text x="609" y="395">A100 80GB</text>
+    <text x="789" y="378">H100 80GB</text>
+    <text x="879" y="328">B200 ~192GB</text>
+  </g>
+
+  <g transform="translate(820, 70)">
+    <rect x="0" y="0" width="270" height="68" fill="#fff" stroke="#ccc"/>
+    <line x1="14" y1="22" x2="46" y2="22" class="model-line"/>
+    <text x="56" y="28" class="legend">模型参数显存需求</text>
+    <line x1="14" y1="50" x2="46" y2="50" class="gpu-line"/>
+    <text x="56" y="56" class="legend">单卡可用显存</text>
+  </g>
+
+  <g>
+    <line x1="900" y1="336" x2="900" y2="135" stroke="#888" stroke-width="2" stroke-dasharray="6,4"/>
+    <polygon points="900,128 894,142 906,142" fill="#888"/>
+    <text x="912" y="240" class="annot" fill="#666">这道"鸿沟"就是分布式</text>
+    <text x="912" y="262" class="annot" fill="#666">训练要解决的问题</text>
+  </g>
+</svg>

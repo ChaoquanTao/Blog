@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" font-family="-apple-system, 'Segoe UI', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .sub   { font-size: 19px; font-weight: 600; fill: #333; text-anchor: middle; }
+    .label { font-size: 17px; fill: #fff; font-weight: 700; text-anchor: middle; }
+    .label-dark { font-size: 15px; fill: #1a5276; font-weight: 700; text-anchor: middle; }
+    .small { font-size: 15px; fill: #555; }
+    .axis  { font-size: 15px; fill: #555; text-anchor: end; }
+    .total { font-size: 18px; fill: #b03a2e; font-weight: 700; text-anchor: middle; }
+    .P { fill: #2874a6; }
+    .G { fill: #5dade2; }
+    .O { fill: #f39c12; }
+  </style>
+
+  <text x="600" y="40" text-anchor="middle" class="title">ZeRO 三阶段：逐步消除冗余（以 1B 参数 + Adam，N=4 张卡为例）</text>
+  <text x="600" y="68" text-anchor="middle" class="small">每张卡的显存占用（GB） — P=参数(2GB) · G=梯度(2GB) · O=优化器状态(12GB) · 完整复制总计 16GB/卡</text>
+
+  <line x1="120" y1="120" x2="120" y2="490" stroke="#555" stroke-width="2"/>
+  <line x1="120" y1="490" x2="1140" y2="490" stroke="#555" stroke-width="2"/>
+
+  <g class="axis">
+    <text x="112" y="495">0</text>
+    <text x="112" y="402">4</text>
+    <text x="112" y="315">8</text>
+    <text x="112" y="227">12</text>
+    <text x="112" y="125">16</text>
+  </g>
+  <line x1="120" y1="402" x2="1140" y2="402" stroke="#eee"/>
+  <line x1="120" y1="315" x2="1140" y2="315" stroke="#eee"/>
+  <line x1="120" y1="227" x2="1140" y2="227" stroke="#eee"/>
+  <line x1="120" y1="120" x2="1140" y2="120" stroke="#eee"/>
+
+  <!-- Bars: each 150 wide, gap 90, start at x=180. 1 GB ≈ 23 px, baseline y=490 -->
+
+  <!-- Baseline DDP: P=2 G=2 O=12 -->
+  <g transform="translate(180, 0)">
+    <rect x="0" y="214" width="150" height="276" class="O"/>
+    <text x="75" y="356" class="label">O = 12 GB</text>
+    <rect x="0" y="168" width="150" height="46" class="G"/>
+    <text x="75" y="195" class="label">G = 2 GB</text>
+    <rect x="0" y="120" width="150" height="48" class="P"/>
+    <text x="75" y="150" class="label">P = 2 GB</text>
+    <text x="75" y="525" class="sub">Baseline (DDP)</text>
+    <text x="75" y="552" class="small" text-anchor="middle">每卡完整复制</text>
+    <text x="75" y="578" class="total">总计 16 GB</text>
+  </g>
+
+  <!-- ZeRO-1: split O -> O/N=3, P=2, G=2, total 7 -->
+  <g transform="translate(420, 0)">
+    <rect x="0" y="421" width="150" height="69" class="O"/>
+    <text x="75" y="463" class="label">O/N = 3</text>
+    <rect x="0" y="375" width="150" height="46" class="G"/>
+    <text x="75" y="402" class="label">G = 2</text>
+    <rect x="0" y="329" width="150" height="46" class="P"/>
+    <text x="75" y="356" class="label">P = 2</text>
+    <text x="75" y="525" class="sub">ZeRO-1</text>
+    <text x="75" y="552" class="small" text-anchor="middle">仅切分 优化器状态</text>
+    <text x="75" y="578" class="total">总计 7 GB</text>
+  </g>
+
+  <!-- ZeRO-2: split O+G -> O/N=3, G/N=0.5, P=2, total 5.5 -->
+  <g transform="translate(660, 0)">
+    <rect x="0" y="421" width="150" height="69" class="O"/>
+    <text x="75" y="463" class="label">O/N = 3</text>
+    <rect x="0" y="409" width="150" height="12" class="G"/>
+    <text x="75" y="404" class="label-dark">G/N = 0.5</text>
+    <rect x="0" y="363" width="150" height="46" class="P"/>
+    <text x="75" y="390" class="label">P = 2</text>
+    <text x="75" y="525" class="sub">ZeRO-2</text>
+    <text x="75" y="552" class="small" text-anchor="middle">优化器状态 + 梯度</text>
+    <text x="75" y="578" class="total">总计 5.5 GB</text>
+  </g>
+
+  <!-- ZeRO-3: split O+G+P -> all/N -->
+  <g transform="translate(900, 0)">
+    <rect x="0" y="421" width="150" height="69" class="O"/>
+    <text x="75" y="463" class="label">O/N = 3</text>
+    <rect x="0" y="409" width="150" height="12" class="G"/>
+    <text x="75" y="404" class="label-dark">G/N = 0.5</text>
+    <rect x="0" y="397" width="150" height="12" class="P"/>
+    <text x="75" y="392" class="label-dark">P/N = 0.5</text>
+    <text x="75" y="525" class="sub">ZeRO-3 (FSDP)</text>
+    <text x="75" y="552" class="small" text-anchor="middle">参数也按需 gather</text>
+    <text x="75" y="578" class="total">总计 4 GB</text>
+  </g>
+
+  <text x="120" y="615" class="small" fill="#666">↑ 显存越省，运行时通信越多：ZeRO-3 在每个 forward/backward 都要 all-gather 参数。本质是"用带宽换显存"。</text>
+</svg>

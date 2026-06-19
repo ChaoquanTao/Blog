@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="-apple-system, 'Segoe UI', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .sub   { font-size: 19px; font-weight: 600; fill: #333; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .label { font-size: 18px; fill: #111; }
+    .small { font-size: 16px; fill: #555; }
+    .gpu   { fill: #ecf3fb; stroke: #2874a6; stroke-width: 3; }
+    .arrow { fill: none; stroke: #1f618d; stroke-width: 3; marker-end: url(#ah3); }
+  </style>
+  <defs>
+    <marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+  </defs>
+
+  <text x="600" y="40" text-anchor="middle" class="title">Ring AllReduce：把梯度切成 N 段，绕环 2(N-1) 步</text>
+  <text x="600" y="68" text-anchor="middle" class="subtitle">阶段一：Reduce-Scatter（求和）  ·  阶段二：All-Gather（广播）</text>
+
+  <g transform="translate(220, 380)">
+    <circle cx="0"   cy="-150" r="58" class="gpu"/>
+    <text x="0" y="-148" text-anchor="middle" class="label" font-weight="700">GPU0</text>
+    <text x="0" y="-122" text-anchor="middle" class="small">梯度分 4 段</text>
+
+    <circle cx="150" cy="0" r="58" class="gpu"/>
+    <text x="150" y="6" text-anchor="middle" class="label" font-weight="700">GPU1</text>
+
+    <circle cx="0"   cy="150" r="58" class="gpu"/>
+    <text x="0"   y="6" text-anchor="middle" class="label" font-weight="700">GPU2</text>
+
+    <circle cx="-150" cy="0" r="58" class="gpu"/>
+    <text x="-150" y="6" text-anchor="middle" class="label" font-weight="700">GPU3</text>
+
+    <path d="M 46,-138 Q 120,-105 142,-46"  class="arrow"/>
+    <path d="M 142, 46 Q 120, 105 46, 138"  class="arrow"/>
+    <path d="M -46, 138 Q -120, 105 -142, 46" class="arrow"/>
+    <path d="M -142,-46 Q -120,-105 -46,-138" class="arrow"/>
+
+    <text x="0" y="240" text-anchor="middle" class="small">每张卡只和"右邻居"通信</text>
+    <text x="0" y="266" text-anchor="middle" class="small">每步发送 1/N 数据</text>
+  </g>
+
+  <g transform="translate(530, 110)">
+    <text x="0" y="0" class="sub">为什么 Ring AllReduce 是带宽最优的？</text>
+
+    <text x="0" y="42" class="label" font-weight="700">设有 N 张 GPU，梯度大小 S</text>
+
+    <text x="0" y="84" class="label" fill="#1f618d" font-weight="700">阶段一：Reduce-Scatter</text>
+    <text x="0" y="112" class="small">把梯度切成 N 段；每张卡接收一段、累加、再传给下一张</text>
+    <text x="0" y="138" class="small">N-1 步后，每张卡都拥有"全网累加好的某一段"</text>
+
+    <text x="0" y="184" class="label" fill="#117a65" font-weight="700">阶段二：All-Gather</text>
+    <text x="0" y="212" class="small">每张卡把自己累加好的段，沿环再传 N-1 步</text>
+    <text x="0" y="238" class="small">最终每张卡都拿到完整聚合结果</text>
+
+    <text x="0" y="288" class="label" font-weight="700">通信量分析</text>
+    <text x="0" y="316" class="small">总步数：2(N-1) 步，每步发送 S/N 数据</text>
+    <text x="0" y="342" class="small">每张卡发送总量 ≈ 2(N-1)/N × S ≈ 2S</text>
+    <text x="0" y="372" class="small" fill="#b03a2e" font-weight="700">→ 与 GPU 数 N 无关！这就是"带宽最优"。</text>
+
+    <text x="0" y="420" class="label" font-weight="700">对比朴素 AllReduce</text>
+    <text x="0" y="448" class="small">中心化广播：master 卡承担 (N-1)·S 通信，成为瓶颈</text>
+    <text x="0" y="474" class="small">树形 AllReduce：延迟最优 (O(log N))，但带宽吃亏</text>
+  </g>
+</svg>

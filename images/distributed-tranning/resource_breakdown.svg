@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1140 540" font-family="-apple-system, 'Segoe UI', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .label { font-size: 19px; fill: #111; }
+    .small { font-size: 15px; fill: #555; }
+    .num   { font-size: 20px; font-weight: 700; fill: #fff; }
+  </style>
+
+  <text x="570" y="42" text-anchor="middle" class="title">以 1B 参数 + Adam + FP16 为例：单卡显存账本（约 16~20 GB）</text>
+
+  <g transform="translate(120,100)">
+    <rect x="0"   y="0" width="90"  height="90" fill="#337ab7"/>
+    <text x="45"  y="55" text-anchor="middle" class="num">2GB</text>
+    <text x="45"  y="118" text-anchor="middle" class="label">参数 P</text>
+    <text x="45"  y="142" text-anchor="middle" class="small">FP16: 2B/参数</text>
+
+    <rect x="100" y="0" width="90"  height="90" fill="#5bc0de"/>
+    <text x="145" y="55" text-anchor="middle" class="num">2GB</text>
+    <text x="145" y="118" text-anchor="middle" class="label">梯度 G</text>
+    <text x="145" y="142" text-anchor="middle" class="small">FP16: 2B/参数</text>
+
+    <rect x="200" y="0" width="360" height="90" fill="#f0ad4e"/>
+    <text x="380" y="55" text-anchor="middle" class="num">12GB</text>
+    <text x="380" y="118" text-anchor="middle" class="label">优化器状态 O</text>
+    <text x="380" y="142" text-anchor="middle" class="small">Adam: master FP32 (4B) + 一阶矩 m (4B) + 二阶矩 v (4B)</text>
+
+    <rect x="570" y="0" width="270" height="90" fill="#d9534f"/>
+    <text x="705" y="55" text-anchor="middle" class="num">~4-8GB</text>
+    <text x="705" y="118" text-anchor="middle" class="label">激活值 A</text>
+    <text x="705" y="142" text-anchor="middle" class="small">随 batch × seq × layers 变化</text>
+  </g>
+
+  <g transform="translate(80,310)">
+    <text x="0" y="0" class="title" font-size="20">→ 由此推导出可"切分"的四个维度：</text>
+
+    <g transform="translate(0,30)">
+      <rect x="0"   y="0" width="240" height="170" rx="10" fill="#fff" stroke="#337ab7" stroke-width="2.5"/>
+      <text x="120" y="38" text-anchor="middle" class="label" fill="#337ab7" font-weight="700">数据维</text>
+      <text x="120" y="74" text-anchor="middle" class="small">切 batch</text>
+      <text x="120" y="106" text-anchor="middle" class="small">→ Data Parallel</text>
+      <text x="120" y="138" text-anchor="middle" class="small">每卡持完整模型</text>
+
+      <rect x="255" y="0" width="240" height="170" rx="10" fill="#fff" stroke="#5cb85c" stroke-width="2.5"/>
+      <text x="375" y="38" text-anchor="middle" class="label" fill="#5cb85c" font-weight="700">参数维（层内）</text>
+      <text x="375" y="74" text-anchor="middle" class="small">切 单层权重矩阵</text>
+      <text x="375" y="106" text-anchor="middle" class="small">→ Tensor Parallel</text>
+      <text x="375" y="138" text-anchor="middle" class="small">单层放不下时用</text>
+
+      <rect x="510" y="0" width="240" height="170" rx="10" fill="#fff" stroke="#f0ad4e" stroke-width="2.5"/>
+      <text x="630" y="38" text-anchor="middle" class="label" fill="#e58e26" font-weight="700">层维（层间）</text>
+      <text x="630" y="74" text-anchor="middle" class="small">切 不同 transformer block</text>
+      <text x="630" y="106" text-anchor="middle" class="small">→ Pipeline Parallel</text>
+      <text x="630" y="138" text-anchor="middle" class="small">层数太多时用</text>
+
+      <rect x="765" y="0" width="240" height="170" rx="10" fill="#fff" stroke="#d9534f" stroke-width="2.5"/>
+      <text x="885" y="38" text-anchor="middle" class="label" fill="#d9534f" font-weight="700">序列维</text>
+      <text x="885" y="74" text-anchor="middle" class="small">切 token 长度</text>
+      <text x="885" y="106" text-anchor="middle" class="small">→ Sequence Parallel</text>
+      <text x="885" y="138" text-anchor="middle" class="small">长上下文激活爆炸时用</text>
+    </g>
+  </g>
+</svg>
