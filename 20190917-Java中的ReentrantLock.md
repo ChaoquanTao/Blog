@@ -32,7 +32,7 @@ categories: Java
 
 在AQS中，有模板方法和需要重写的细节方法。模板方法负责搭建获取锁和释放锁的框架，细节方法延迟到子类中去实现。
 
-![aqs.jpg](http://ww1.sinaimg.cn/large/006ImZ0Ogy1g81gruisynj30hc0iawiz.jpg)
+![aqs.jpg](images/external/178afd38-006ImZ0Ogy1g81gruisynj30hc0iawiz.jpg)
 
 上图AQS类中，蓝色方法为模板方法，绿色方法为可能需要覆盖的方法，即在蓝色方法中调用了绿色方法。Sync继承自AQS, 而`NonfairSync`和`FairSync`继承了Sync,相当于最终要在公平锁和非公平锁中实现细节方法。可以看到，共享式的获取锁和释放锁是没有被实现的，所以说，`ReentrantLock`是独占锁。
 

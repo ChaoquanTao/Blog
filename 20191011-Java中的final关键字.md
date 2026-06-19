@@ -46,7 +46,7 @@ public final class Tiger  {
 
 得到：
 
-<img src="http://ww1.sinaimg.cn/large/006ImZ0Ogy1g7uchin2fgj30ll0kht9c.jpg" alt="7f26f50ff199d5bba671d34a3115a01.png" style="zoom:80%;" />
+<img src="images/external/024d0929-006ImZ0Ogy1g7uchin2fgj30ll0kht9c.jpg" alt="7f26f50ff199d5bba671d34a3115a01.png" style="zoom:80%;" />
 
-<img src="http://ww1.sinaimg.cn/large/006ImZ0Ogy1g7ucij5ni5j30mo0eqdg2.jpg" alt="22ceb20e2a54fb5ca9e545e3b62b34d.png" style="zoom:80%;" />
+<img src="images/external/b303e892-006ImZ0Ogy1g7ucij5ni5j30mo0eqdg2.jpg" alt="22ceb20e2a54fb5ca9e545e3b62b34d.png" style="zoom:80%;" />
 

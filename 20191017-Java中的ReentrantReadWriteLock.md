@@ -10,7 +10,7 @@ ReentrantReadWriteLock
 
 看下它的类图
 
-<img src="http://ww1.sinaimg.cn/large/006ImZ0Ogy1g80yg0yrbmj30b10njgme.jpg" alt="rwlock.png" style="zoom:80%;" />
+<img src="images/external/8600ee76-006ImZ0Ogy1g80yg0yrbmj30b10njgme.jpg" alt="rwlock.png" style="zoom:80%;" />
 
 可以看到`ReentrantReadWriteLock`实现了`ReadWriteLock`接口。`ReadWriteLock`就是读写锁的意思，那么问题来了，为什么要有个读写锁呢？为什么要把读锁和写锁分开呢？这里就是出于对性能的考虑了，多个线程之间，可以同时读，但是不可以同时写或者一个读一个写，所以分开之后，读锁和写锁各司其职，可以提高效率。
 
@@ -59,13 +59,13 @@ ReentrantReadWriteLock
 
 简言之，**如果锁被读线程（无论是不是当前线程）或者其他写线程占用，则获取写锁失败**
 
-![rrw_tryacq.png](http://ww1.sinaimg.cn/large/006ImZ0Ogy1g81jvgkn8vj30p60hl40d.jpg)
+![rrw_tryacq.png](images/external/40190448-006ImZ0Ogy1g81jvgkn8vj30p60hl40d.jpg)
 
 
 
 ##### 释放
 
-![rrw_tryrelease.png](http://ww1.sinaimg.cn/large/006ImZ0Ogy1g81jy2d104j30f205rglz.jpg)
+![rrw_tryrelease.png](images/external/3879956d-006ImZ0Ogy1g81jy2d104j30f205rglz.jpg)
 
 
 

@@ -28,7 +28,7 @@ public class Test {
 
 使用`javac`进行编译,在十六进制下查看，得到：
 
-![ed66adec53a9775ef5de3e366e0054e.png](http://ww1.sinaimg.cn/large/006ImZ0Oly1g7tcyi4g70j30dk07e3yr.jpg)
+![ed66adec53a9775ef5de3e366e0054e.png](images/external/4112822d-006ImZ0Oly1g7tcyi4g70j30dk07e3yr.jpg)
 
 这就是我们编译得到的class文件。
 
@@ -88,7 +88,7 @@ attribute_info | attributes | attributes_count |
 
 我们使用`javap`命令来简单明了的看下class常量池：
 
-![359b2d3d056ad2361f3aeec265d5573.png](http://ww1.sinaimg.cn/large/006ImZ0Oly1g7tcz46t7jj30h907ndfv.jpg)
+![359b2d3d056ad2361f3aeec265d5573.png](images/external/4fc169db-006ImZ0Oly1g7tcz46t7jj30h907ndfv.jpg)
 
 上图展示了class常量池中的内容，常量池中主要存放两种常量：字面量（Literal）和符号引用（Symbolic References）.字面量指的就是一些字符串啊数字啊之类的东西，而符号引用包括以下三类常量：
 

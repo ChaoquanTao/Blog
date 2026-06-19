@@ -64,11 +64,11 @@ public class ThreadLocalApp {
 
 从`set`方法浅看下`threadLocal`的实现原理:
 
-<img src="http://tva4.sinaimg.cn/large/006ImZ0Ogy1h1jre3upgbj30jg0ao41f.jpg" alt="image" style="zoom:50%;" />
+<img src="images/external/16a7ee2f-006ImZ0Ogy1h1jre3upgbj30jg0ao41f.jpg" alt="image" style="zoom:50%;" />
 
 可以看到，所谓的`set`就是把`value`放到`ThreadLocalMap`里：
 
-<img src="http://tva2.sinaimg.cn/large/006ImZ0Ogy1h1jrh9926oj30h004ejs5.jpg" alt="image" style="zoom:60%;" />
+<img src="images/external/79379818-006ImZ0Ogy1h1jrh9926oj30h004ejs5.jpg" alt="image" style="zoom:60%;" />
 
 这个`map`是`Thread`的一个静态成员变量:
 
@@ -78,7 +78,7 @@ public class ThreadLocalApp {
 
 至此也就大概明了了：所谓`ThreadLocal`,也就是它维护了一个指向`Thread`对象的`ThreadLocalMap`类型的引用，其中`Map`的`key`为`ThreadLocal`类型，`set`和`get`的时候就是操作的都是`Thread`对象的`map`的`set`和`get`方法，说白了就是在操作线程的局部变量，自然不会受其他线程影响，也不会影响到其他线程。
 
-<img src="http://tva2.sinaimg.cn/large/006ImZ0Ogy1h1jrt1xl5rj310g0j47cu.jpg" alt="image" style="zoom:50%;" />
+<img src="images/external/e67243d2-006ImZ0Ogy1h1jrt1xl5rj310g0j47cu.jpg" alt="image" style="zoom:50%;" />
 
 
 
@@ -196,7 +196,7 @@ set后,pool-1-thread-2 tl值:1
 
 再来看下`ThreadLocal.ThreadLocalMap`里面的`entry`. 可以看到，`entry`的`key`是个`ThraedLocal`，并且是个弱引用。
 
-<img src="http://tvax3.sinaimg.cn/large/006ImZ0Ogy1h1jrt1xl5rj310g0j47cu.jpg" alt="image" style="zoom:50%;" />
+<img src="images/external/3dbdeec2-006ImZ0Ogy1h1jrt1xl5rj310g0j47cu.jpg" alt="image" style="zoom:50%;" />
 
 
 
@@ -230,23 +230,23 @@ public class ThreadLocalApp {
 
 执行完代码块①后，ThreadLocal对象的引用关系如下，其中实线为强引用, 虚线为弱引用。
 
-![threadlocal](http://tva4.sinaimg.cn/large/006ImZ0Ogy1h1l68lrx3aj30ix08pt9a.jpg)
+![threadlocal](images/external/864efd39-006ImZ0Ogy1h1l68lrx3aj30ix08pt9a.jpg)
 
 这时候通过debug查看threadLocalMap,还是可以看到ThreadLocal以及指向它的弱引用的:
 
-<img src="http://tvax2.sinaimg.cn/large/006ImZ0Ogy1h1l6eyfk5oj30qs0f8wkx.jpg" alt="image" style="zoom:50%;" />
+<img src="images/external/bb4d6ae2-006ImZ0Ogy1h1l6eyfk5oj30qs0f8wkx.jpg" alt="image" style="zoom:50%;" />
 
 执行完代码块②后，ThreadLocal对象就只有一个弱引用指向它
 
-![threadlocal](http://tvax3.sinaimg.cn/large/006ImZ0Ogy1h1l6a7vbs6j30ix08pt9b.jpg)
+![threadlocal](images/external/c327e5d1-006ImZ0Ogy1h1l6a7vbs6j30ix08pt9b.jpg)
 
 在进行一次gc后，ThreadLocal就彻底沦为“孤儿”了：
 
-![threadlocal](http://tvax2.sinaimg.cn/large/006ImZ0Ogy1h1l6ckrug8j30ix08pq3k.jpg)
+![threadlocal](images/external/7b84a5a6-006ImZ0Ogy1h1l6ckrug8j30ix08pq3k.jpg)
 
 这时候再去看ThreadLocalMap：
 
-<img src="http://tvax3.sinaimg.cn/large/006ImZ0Ogy1h1u58uro4jj30pe0a6q6f.jpg" alt="image-20220424222437775" style="zoom:50%;" />
+<img src="images/external/eda03d97-006ImZ0Ogy1h1u58uro4jj30pe0a6q6f.jpg" alt="image-20220424222437775" style="zoom:50%;" />
 
 这时候唯一存在的一条指向`value`的引用链为：`Thread` -> `ThreadLocalMap` ->` Entry` -> `value`.  `value`虽然一直存在（只要当前线程在，`value就一直在`)，但是外界却无法获取它。这时候，就发生了内存泄露。要避免这个问题,也很简单，每次用完记得`remove`就行。
 
@@ -299,11 +299,11 @@ main
 
 `Thread`类的成员变量共有两个`ThreadLocal.ThreadLocalMap`类型的变量，一个是`threadLocals`,另一个是`inheritableThreadLocals`.
 
-<img src="http://tva2.sinaimg.cn/large/006ImZ0Ogy1h1twm9m8kgj30x00bowhv.jpg" alt="image" style="zoom:50%;" />
+<img src="images/external/2257c964-006ImZ0Ogy1h1twm9m8kgj30x00bowhv.jpg" alt="image" style="zoom:50%;" />
 
 而`InheriableThreadLocal`继承自`ThreadLocal`, 重写了`childValue`，`getMap`,`createMap`三个方法。
 
-<img src="http://tvax4.sinaimg.cn/large/006ImZ0Ogy1h1two74qrlj31ka0skwu2.jpg" alt="image" style="zoom:50%;" />
+<img src="images/external/8e122bf5-006ImZ0Ogy1h1two74qrlj31ka0skwu2.jpg" alt="image" style="zoom:50%;" />
 
 
 
