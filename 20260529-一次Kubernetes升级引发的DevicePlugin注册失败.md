@@ -76,35 +76,28 @@ device plugin 需要实现的核心 gRPC 接口只有四个：
   <text x="500" y="24" text-anchor="middle" font-weight="bold">kubelet</text>
   <line x1="120" y1="34" x2="120" y2="360" stroke="#888" stroke-dasharray="4 3"/>
   <line x1="500" y1="34" x2="500" y2="360" stroke="#888" stroke-dasharray="4 3"/>
-
   <!-- step 1 -->
   <rect x="60" y="50" width="120" height="30" fill="#eef" stroke="#557"/>
   <text x="120" y="69" text-anchor="middle">① Start()</text>
   <text x="120" y="98" text-anchor="middle" fill="#555">listen cool.sock</text>
-
   <!-- step 2: register -->
   <line x1="120" y1="120" x2="500" y2="120" stroke="#333" marker-end="url(#arr)"/>
   <text x="310" y="113" text-anchor="middle">② Register(endpoint, resourceName)</text>
-
   <!-- step 3: dial back -->
   <line x1="500" y1="160" x2="120" y2="160" stroke="#c33" marker-end="url(#arr)"/>
   <text x="310" y="153" text-anchor="middle" fill="#c33">③ dial back → connect cool.sock</text>
   <text x="310" y="178" text-anchor="middle" fill="#c33">（问题就出在这一步）</text>
-
   <!-- step 4: listandwatch -->
   <line x1="120" y1="210" x2="500" y2="210" stroke="#333" marker-end="url(#arr)"/>
   <text x="310" y="203" text-anchor="middle">④ ListAndWatch → 上报设备列表</text>
-
   <!-- step 5: register returns -->
   <line x1="500" y1="250" x2="120" y2="250" stroke="#333" marker-end="url(#arr)"/>
   <text x="310" y="243" text-anchor="middle">⑤ Register 返回成功</text>
-
   <!-- step 6: allocate -->
   <line x1="500" y1="300" x2="120" y2="300" stroke="#393" marker-end="url(#arr)"/>
   <text x="310" y="293" text-anchor="middle" fill="#393">⑥ Pod 调度后 → Allocate()</text>
   <line x1="120" y1="330" x2="500" y2="330" stroke="#393" marker-end="url(#arr)"/>
   <text x="310" y="323" text-anchor="middle" fill="#393">返回 envs / devices 注入容器</text>
-
   <defs>
     <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
       <path d="M0,0 L8,3 L0,6 Z" fill="#333"/>
