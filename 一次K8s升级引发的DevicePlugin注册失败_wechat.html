@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一个 k8s device plugin 的"坑"</title>
+</head>
+<body style="margin:0;padding:0;background:#f8f9fa;">
+<!--
+  WeChat 公众号排版
+  文章：一次 Kubernetes 升级引发的 Device Plugin 注册失败
+  主题色（暗紫）：
+    navy        #0f172a
+    indigo      #6366f1
+    indigo_light#eef2ff
+    purple      #8b5cf6
+    rose        #f43f5e
+    orange      #ea580c
+-->
+<div style="max-width:100%;margin:0 auto;background:#ffffff;">
+
+<!-- ===================== Hero ===================== -->
+<div style="background:#0f172a;padding:52px 28px 44px;text-align:center;">
+  <div style="display:inline-block;font-size:11px;letter-spacing:0.12em;color:#818cf8;background:#1e2542;border:1px solid #3b3f6b;padding:5px 16px;border-radius:20px;margin-bottom:22px;">KUBERNETES · 源码排查</div>
+  <div style="height:10px;"></div>
+  <p style="font-family:'STSong','SimSun',serif;font-size:28px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">一个 k8s device plugin<br>的<span style="color:#818cf8;">"坑"</span></p>
+  <p style="font-size:13px;color:#7b8190;letter-spacing:0.06em;margin:0;line-height:1.7;">代码一行没改，镜像还是同一个<br>只是集群版本变了，DaemonSet 就疯狂报错</p>
+  <div style="width:36px;height:2px;background:#6366f1;margin:22px auto 0;"></div>
+</div>
+
+<!-- ===================== 导语 ===================== -->
+<div style="padding:26px 22px 4px;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">最近把一个 Kubernetes 集群从旧版本升级到了新版本，集群里跑着一个自研的 device plugin（以 DaemonSet 形式部署）。<strong>升级前一切正常，升级后这个 DaemonSet 一启动就疯狂报错：</strong></p>
+  <div style="background:#0f172a;border-radius:8px;padding:22px 20px;margin:0 0 16px;">
+    <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 12px;font-family:'Courier New',monospace;">// 报错日志</p>
+    <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#fca5a5;line-height:1.8;margin:0;">E&nbsp;&nbsp;Device plugin register failed, err:<br>&nbsp;&nbsp;&nbsp;rpc error: code = Unknown<br>&nbsp;&nbsp;&nbsp;desc = failed to dial device plugin:<br>&nbsp;&nbsp;&nbsp;<span style="color:#fbbf24;">context deadline exceeded</span></p>
+  </div>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 4px;text-align:justify;">诡异的地方在于：<strong>代码一行没改，镜像还是同一个</strong>，只是集群版本变了。报错说的是"注册（register）失败"，错误内容却是"拨号（dial）超时"——到底是谁在向谁拨号？这篇文章就从 Device Plugin 的原理出发，把这个问题彻底讲清楚。</p>
+</div>
+
+<!-- ===================== 章节 01 ===================== -->
+<div style="padding:0 22px;">
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cdf5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">01</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;padding-bottom:8px;border-bottom:2px solid #6366f1;">什么是 Device Plugin</span>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">Kubernetes 调度器天生只认识两种资源：CPU 和内存。但现实里节点上还有大量<strong>异构设备</strong>：GPU、RDMA 网卡、FPGA、TPU、加密卡……这些 Kubernetes 默认一无所知。</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">想让 Pod 能声明 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #d8dcf5;">nvidia.com/gpu: 2</span>，就得有人告诉 kubelet 两件事：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">① 节点上有哪些设备</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">这种设备有几个、健不健康。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:18px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">② 怎么把设备塞进容器</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">某 Pod 申请设备后，如何挂设备文件、设环境变量等。</p>
+</div>
+
+<div style="background:#eef2ff;border:1px solid #d2d8f7;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">把硬件细节硬编码进 kubelet 不现实，于是 Kubernetes 提供了一个扩展点：Device Plugin 框架。这是典型的"机制与策略分离"。</p>
+</div>
+
+<!-- 1.2 架构 -->
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:26px 0 12px;">基本架构</p>
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">Device Plugin 本质上是一个 gRPC server，通常以 DaemonSet 部署到每个节点，与该节点的 kubelet 通过节点本地的 <strong>Unix domain socket</strong> 通信。</p>
+
+<!-- 架构示意（重建自 ASCII 图） -->
+<div style="background:#f8f8fc;border:1px solid #e2e8f0;border-radius:8px;padding:18px 16px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 12px;font-family:'Courier New',monospace;">// 一个 Node 内部</p>
+  <div style="background:#eef2ff;border:1px solid #c7cdf5;border-radius:6px;padding:12px 14px;text-align:center;margin-bottom:8px;">
+    <p style="font-size:14px;font-weight:700;color:#4338ca;margin:0;">kubelet</p>
+    <p style="font-size:12px;color:#64748b;margin:4px 0 0;">监听 kubelet.sock（注册服务）</p>
+  </div>
+  <p style="text-align:center;color:#6366f1;font-size:13px;margin:4px 0;font-family:'Courier New',monospace;">▲ gRPC over unix socket ▼</p>
+  <div style="background:#fff7ed;border:1px solid #fcd9b6;border-radius:6px;padding:12px 14px;text-align:center;margin-bottom:10px;">
+    <p style="font-size:14px;font-weight:700;color:#ea580c;margin:0;">device plugin（DaemonSet）</p>
+    <p style="font-size:12px;color:#64748b;margin:4px 0 0;">监听 cool.sock（自己的 gRPC server）</p>
+  </div>
+  <div style="background:#0f172a;border-radius:6px;padding:10px 14px;">
+    <p style="font-size:11px;color:#94a3b8;margin:0 0 4px;font-family:'Courier New',monospace;">/var/lib/kubelet/device-plugins/</p>
+    <p style="font-size:12px;color:#e2e8f0;margin:0;font-family:'Courier New',monospace;line-height:1.7;">├── kubelet.sock&nbsp;&nbsp;<span style="color:#818cf8;">(kubelet 监听)</span><br>└── cool.sock&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#fb923c;">(插件监听)</span></p>
+  </div>
+</div>
+
+<div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">关键约定</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">插件 Pod 要访问 kubelet 的 socket 目录，通常需要 <span style="font-family:'Courier New',monospace;font-size:12px;background:#fde8d6;color:#c2410c;padding:1px 5px;border-radius:3px;">hostPath</span> 挂载该目录，并以 <span style="font-family:'Courier New',monospace;font-size:12px;background:#fde8d6;color:#c2410c;padding:1px 5px;border-radius:3px;">privileged</span> 运行。</p>
+</div>
+
+<!-- 1.3 四个接口 -->
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:26px 0 12px;">四个接口 + 一次握手</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#6366f1;margin:0 0 3px;">GetDevicePluginOptions</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">声明插件能力，一般返回空。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#6366f1;margin:0 0 3px;">ListAndWatch</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;"><strong>流式接口</strong>，持续向 kubelet 上报设备列表及健康状态。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#6366f1;margin:0 0 3px;">Allocate</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">Pod 真正使用设备时被调用，返回要注入容器的环境变量、设备文件、挂载等。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:18px;">
+  <p style="font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#64748b;margin:0 0 3px;">GetPreferredAllocation</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:0;line-height:1.6;">可选，给 kubelet 提供设备分配偏好。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;text-align:justify;">注意一个容易忽略的细节：注册请求是插件主动发起的，但建立设备上报通道却是 <strong>kubelet 反过来拨号连插件</strong>。</p>
+
+<!-- 握手时序图（重建 SVG 为纵向步骤） -->
+<p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:18px 0 10px;font-family:'Courier New',monospace;text-align:center;">// 注册握手时序（plugin ⇄ kubelet）</p>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:0 0 8px;">
+
+  <div style="background:#eef2ff;border:1px solid #c7cdf5;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 2px;">① plugin: Start()</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">listen cool.sock，让自己的 socket 可被连接。</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+
+  <div style="background:#eef2ff;border:1px solid #c7cdf5;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 2px;">② plugin → kubelet: Register()</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">上报 endpoint、resourceName。</p>
+  </div>
+  <p style="text-align:center;color:#f43f5e;font-size:14px;margin:3px 0;">↓</p>
+
+  <div style="background:#fff1f2;border:2px solid #f9a8b4;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#be123c;margin:0 0 2px;">③ kubelet → plugin: dial back</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">kubelet 反向连接 cool.sock 建立上报通道。<strong style="color:#be123c;">本文 bug 就出在这一步。</strong></p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+
+  <div style="background:#f8f8fc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#334155;margin:0 0 2px;">④ plugin → kubelet: ListAndWatch</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">上报设备列表，保持流。</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+
+  <div style="background:#f8f8fc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#334155;margin:0 0 2px;">⑤ Register 返回成功</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">至此插件接入完成。</p>
+  </div>
+  <p style="text-align:center;color:#16a34a;font-size:14px;margin:3px 0;">↓</p>
+
+  <div style="background:#0f172a;border-radius:6px;padding:10px 14px;text-align:center;">
+    <p style="font-size:13px;font-weight:700;color:#4ade80;margin:0;">⑥ Pod 调度后 → Allocate() → 注入容器</p>
+  </div>
+</div>
+
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:18px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">核心判断</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">插件必须先把自己的 gRPC server 起起来（socket 可被连接），kubelet 才能在注册时成功反向拨号。记住 ① 与 ③ 的关系。</p>
+</div>
+
+<!-- 1.4 最小骨架代码 -->
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:26px 0 12px;">最小骨架：注意 main 里的顺序</p>
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 12px;text-align:justify;">下面这段 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #d8dcf5;">main</span> 的顺序，就是本文 bug 的核心：</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:0 0 18px;overflow:hidden;">
+<p style="font-family:'Courier New',Courier,monospace;font-size:12.5px;color:#e2e8f0;line-height:1.85;margin:0;">
+<span style="color:#c792ea;">func</span> <span style="color:#82aaff;">main</span>() {<br>
+&nbsp;&nbsp;p := NewPlugin()<br>
+&nbsp;&nbsp;<span style="color:#7b8190;">// 看似无害的顺序：先注册，再启动</span><br>
+&nbsp;&nbsp;<span style="color:#c792ea;">if</span> err := p.<span style="color:#fca5a5;">Register</span>(); err != <span style="color:#c792ea;">nil</span> {&nbsp;<span style="color:#f43f5e;">// ← 新集群会失败</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;log.Fatalf(<span style="color:#c3e88d;">"register failed: %v"</span>, err)<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span style="color:#c792ea;">if</span> err := p.<span style="color:#82aaff;">Start</span>(); err != <span style="color:#c792ea;">nil</span> {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;log.Fatalf(<span style="color:#c3e88d;">"start failed: %v"</span>, err)<br>
+&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;<span style="color:#c792ea;">select</span>{} <span style="color:#7b8190;">// block forever</span><br>
+}
+</p>
+</div>
+</div>
+
+<!-- 分割线 -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===================== 章节 02 ===================== -->
+<div style="padding:0 22px;">
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cdf5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">02</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;padding-bottom:8px;border-bottom:2px solid #6366f1;">升级后遇到的奇怪问题</span>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">这份代码（先 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:1px 5px;border-radius:3px;">Register()</span> 后 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:1px 5px;border-radius:3px;">Start()</span>）在旧集群跑了很久都没问题。升级后，Pod 一启动就 CrashLoopBackOff。三个反直觉的点：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>代码和镜像完全没变</strong>，唯一变量是集群版本——第一反应根本不会怀疑自己的代码。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;">错误显示在 <span style="font-family:'Courier New',monospace;font-size:12px;color:#6366f1;">Register()</span>，内容却是 <span style="font-family:'Courier New',monospace;font-size:12px;color:#be123c;">failed to dial device plugin</span>——注册明明是插件主动发的，谁拨谁？</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:18px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><span style="font-family:'Courier New',monospace;font-size:12px;color:#c2410c;">context deadline exceeded</span> 是个超时——kubelet 在等一个永远等不到的连接。</p></td>
+  </tr></table>
+</div>
+</div>
+
+<!-- 分割线 -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===================== 章节 03 ===================== -->
+<div style="padding:0 22px;">
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cdf5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">03</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;padding-bottom:8px;border-bottom:2px solid #6366f1;">基于原理的问题分析</span>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:8px 0 12px;">定位：是谁在拨号</p>
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">回到握手第 ③ 步：kubelet 处理注册时，会反过来连接插件声明的 socket。而我们的顺序是「先 Register，后 Start」，于是：</p>
+
+<!-- 失败链路 -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:0 0 18px;">
+  <div style="background:#eef2ff;border:1px solid #c7cdf5;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0;">Register() → kubelet 收到，立刻去 dial cool.sock</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#fff1f2;border:1px solid #f9a8b4;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#be123c;margin:0;">但 Start() 还没执行，cool.sock 根本不存在</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#fff7ed;border:1px solid #fcd9b6;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#c2410c;margin:0;">kubelet 拨号阻塞，超时</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#0f172a;border-radius:6px;padding:10px 14px;">
+    <p style="font-family:'Courier New',monospace;font-size:12px;color:#fca5a5;margin:0;text-align:center;">Register() 收到 error：<br>failed to dial device plugin: context deadline exceeded</p>
+  </div>
+</div>
+
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">根因</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">错误里的 "device plugin" 指的就是<strong>我们自己的插件</strong>，是 kubelet 在抱怨"我连不上你"。socket 还没就绪，插件就抢先注册了。</p>
+</div>
+
+<!-- 3.2 为什么旧集群没事 -->
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:26px 0 12px;">那为什么旧集群一直没事</p>
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">区别在于 kubelet 在不同版本里处理注册请求的方式。</p>
+
+<!-- 旧版本卡片 -->
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 18px;margin-bottom:12px;">
+  <p style="font-size:12px;font-weight:700;color:#16a34a;letter-spacing:0.04em;margin:0 0 8px;">旧版本 ≤ 1.24 · 异步回拨</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;line-height:1.7;margin:0 0 10px;">注册 handler 收到 Register 后<strong>立即返回成功</strong>，把"反向拨号"丢进 goroutine 异步做。</p>
+  <div style="background:#0f172a;border-radius:6px;padding:12px 14px;">
+    <p style="font-family:'Courier New',monospace;font-size:12px;color:#e2e8f0;line-height:1.8;margin:0;">
+    <span style="color:#82aaff;">go</span> m.addEndpoint(r)&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#4ade80;">// 异步 fire-and-forget</span><br>
+    <span style="color:#c792ea;">return</span> &Empty{}, <span style="color:#c792ea;">nil</span>&nbsp;<span style="color:#4ade80;">// 立刻返回成功</span></p>
+  </div>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;line-height:1.7;margin:10px 0 0;">Register 瞬间成功 → 插件继续 Start()、socket 建好 → 稍后 goroutine 才拨号，<strong>此时 socket 已就绪</strong>。错误顺序被"异步 + 时间差"悄悄兜住。</p>
+</div>
+
+<p style="text-align:center;color:#94a3b8;font-size:18px;margin:8px 0;">⇣ 重构后 ⇣</p>
+
+<!-- 新版本卡片 -->
+<div style="background:#fff1f2;border:1px solid #fbcfe8;border-radius:8px;padding:16px 18px;margin-bottom:18px;">
+  <p style="font-size:12px;font-weight:700;color:#be123c;letter-spacing:0.04em;margin:0 0 8px;">新版本 ≥ 1.25 · 同步回拨</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;line-height:1.7;margin:0 0 10px;">goroutine 没了，改成在 handler 里<strong>同步</strong>连接插件，连不上就直接把 error 返回给注册请求。</p>
+  <div style="background:#0f172a;border-radius:6px;padding:12px 14px;">
+    <p style="font-family:'Courier New',monospace;font-size:12px;color:#e2e8f0;line-height:1.8;margin:0;">
+    <span style="color:#c792ea;">if</span> err := s.connectClient(...); err != <span style="color:#c792ea;">nil</span> {<br>
+    &nbsp;&nbsp;<span style="color:#c792ea;">return</span> &Empty{}, err&nbsp;<span style="color:#f43f5e;">// 同步拨号，失败即返回</span><br>
+    }</p>
+  </div>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;line-height:1.7;margin:10px 0 0;"><span style="font-family:'Courier New',monospace;font-size:12px;color:#be123c;">connectClient</span> 是带 <span style="font-family:'Courier New',monospace;font-size:12px;color:#be123c;">grpc.WithBlock()</span>、10 秒超时的阻塞拨号。插件没 listen，必然超时。</p>
+</div>
+
+<!-- 版本对比（纵向卡片替代 3 列表格） -->
+<p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:18px 0 10px;font-family:'Courier New',monospace;text-align:center;">// 两个版本逐项对比</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;border-collapse:collapse;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+  <tr>
+    <td style="padding:10px 12px;background:#0f172a;color:#cbd5e1;font-weight:500;font-size:12px;width:34%;">维度</td>
+    <td style="padding:10px 12px;background:#14532d;color:#bbf7d0;font-weight:500;font-size:12px;">≤ 1.24</td>
+    <td style="padding:10px 12px;background:#7f1d1d;color:#fecaca;font-weight:500;font-size:12px;">≥ 1.25</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:12px;">回拨方式</td>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#f0fdf4;color:#15803d;font-size:12px;">异步 goroutine</td>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#fff1f2;color:#be123c;font-size:12px;">同步 connectClient</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:12px;">何时返回</td>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#f0fdf4;color:#15803d;font-size:12px;">立即成功</td>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#fff1f2;color:#be123c;font-size:12px;">拨号成功后</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:12px;">容错</td>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#f0fdf4;color:#15803d;font-size:12px;">时间差兜底</td>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#fff1f2;color:#be123c;font-size:12px;">零容忍</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:12px;">现象</td>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#f0fdf4;color:#15803d;font-size:12px;">一切正常</td>
+    <td style="padding:10px 12px;border-bottom:1px solid #e2e8f0;background:#fff1f2;color:#be123c;font-size:12px;">注册即失败</td>
+  </tr>
+</table>
+
+<!-- 3.3 版本/PR -->
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:26px 0 12px;">版本、PR 与官方说法</p>
+
+<div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:0 0 12px;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">来龙去脉</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;">引入它的是 PR <strong>#109016</strong>——把 device-plugin 逻辑重构进独立 plugin 包，随 <strong>v1.25.0</strong> 发布。有意思的是，PR 本意只是重构，<strong>async → sync 的语义变化是个非预期副作用</strong>。</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;">副作用后来才被发现（KubeVirt 升级后挂了），于是有了 issue <strong>#112395</strong>。维护者讨论后<strong>决定保留新语义</strong>：因为"先起 server 再注册"本就更正确、对新老集群都兼容。</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">官方文档与 1.26《Device Manager graduates to GA》博客把它确认为既定行为（代码实际落在 1.25，1.26 博客只是追认）。</p>
+</div>
+
+<!-- 3.4 修复 -->
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:26px 0 12px;">修复：一行顺序调整</p>
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 12px;text-align:justify;">先 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:1px 5px;border-radius:3px;">Start()</span> 把 server 起好，再 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:1px 5px;border-radius:3px;">Register()</span>：</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:18px 16px;margin:0 0 12px;">
+<p style="font-family:'Courier New',Courier,monospace;font-size:12.5px;color:#e2e8f0;line-height:1.9;margin:0;">
+&nbsp;&nbsp;p := NewPlugin()<br>
+<span style="background:#3b1219;color:#fca5a5;display:block;">- if err := p.Register(); err != nil { ... }</span>
+<span style="background:#0f2f1c;color:#86efac;display:block;">&nbsp;&nbsp;if err := p.Start(); err != nil { ... }</span>
+<span style="background:#0f2f1c;color:#86efac;display:block;">+ if err := p.Register(); err != nil { ... }</span>
+&nbsp;&nbsp;<span style="color:#c792ea;">select</span>{}
+</p>
+</div>
+
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">✓ 新集群（≥1.25）</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">kubelet 同步回拨时 socket 已就绪，握手成功。</p>
+</div>
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:18px;">
+  <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">✓ 老集群（≤1.24）</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">先起 server 从来没有副作用——它本就该这样。</p>
+</div>
+</div>
+
+<!-- ===================== 写在最后 ===================== -->
+<div style="padding:0 22px;">
+<div style="margin:36px 0 18px;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cdf5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">04</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;padding-bottom:8px;border-bottom:2px solid #6366f1;">写在最后</span>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>握手是双向的</strong>：插件主动 Register，但上报通道是 kubelet 反向连接插件。正确顺序永远是先 Start、再 Register。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>不要依赖"未被承诺"的时序行为</strong>：旧版本的异步注册只是实现细节，不是契约。依赖外部系统时，依赖它承诺的契约，而非当前的实现时序。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:18px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>同步/异步的语义差异</strong>足以把潜伏的 bug 从"看不见"变成"必现"。异步用时间差掩盖顺序错误，同步则无情地暴露它。</p></td>
+  </tr></table>
+</div>
+
+<!-- Closing -->
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0 0;text-align:center;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#bcc3d4;line-height:2;margin:0;">
+  排查"代码没动、升级就挂"的问题，最高效的路径就是这篇文章的结构本身：<br><br>
+  <strong style="color:#818cf8;">先理解原理（握手时序），再回到现象（谁在拨谁），最后到对方源码里找差异（async vs sync）。</strong>
+  </p>
+</div>
+
+<!-- Footer -->
+<div style="margin-top:36px;padding-top:18px;border-top:1px solid #e2e8f0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.8;">Kubernetes · Device Plugin · kubelet · gRPC · 源码排查 · 时序问题</p>
+</div>
+
+</div>
+</div>
+</body>
+</html>

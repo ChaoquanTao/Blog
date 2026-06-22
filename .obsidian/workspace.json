@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "20191010-一次由继承引发的思考.md",
+                "file": "20260529-一次Kubernetes升级引发的DevicePlugin注册失败.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "20191010-一次由继承引发的思考"
+              "title": "20260529-一次Kubernetes升级引发的DevicePlugin注册失败"
             }
           }
         ]
@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 226.5
   },
   "right": {
     "id": "d35bbeb7d3459768",
@@ -183,8 +183,16 @@
       "bases:Create new base": false
     }
   },
-  "active": "c93c972000876d84",
+  "active": "87b8775ad59a8121",
   "lastOpenFiles": [
+    "一次K8s升级引发的DevicePlugin注册失败_wechat.html",
+    "Untitled.canvas",
+    "20260622-k8s controller开发范式.md",
+    "20260622-level-trigger-or-edge-trigger.md",
+    "20191010-一次由继承引发的思考.md",
+    "k8s-controller-development-paradigm.md",
+    "messenger_social_v2.gif",
+    "messenger_town_v2.gif",
     "本周科技要闻-20260620_封面.png",
     "本周科技要闻-20260620_封面.svg",
     "本周科技要闻-20260620_wechat.html",
@@ -196,10 +204,6 @@
     "images/external/4fc169db-006ImZ0Oly1g7tcz46t7jj30h907ndfv.jpg",
     "images/external/4112822d-006ImZ0Oly1g7tcyi4g70j30dk07e3yr.jpg",
     "images/external/1cc02af6-006ImZ0Oly1g7t7mz7mu4j30gs083glm.jpg",
-    "images/external/3879956d-006ImZ0Ogy1g81jy2d104j30f205rglz.jpg",
-    "images/external/40190448-006ImZ0Ogy1g81jvgkn8vj30p60hl40d.jpg",
-    "20191010-一次由继承引发的思考.md",
-    "images/external/178afd38-006ImZ0Ogy1g81gruisynj30hc0iawiz.jpg",
     "20190112-直面Java.md",
     "20191106-MySQL索引篇.md",
     "20260616-FUSE：让文件系统工作在用户空间.md",
@@ -222,9 +226,6 @@
     "20230525-聊一聊linux中的tc命令.md",
     "20220706-聊一聊DelayQueue.md",
     "20190605-类加载机制.md",
-    "20190704-科学上网.md",
-    "20220430-当ThreadLocal遇上线程池.md",
-    "20200915-容器学习笔记.md",
     "images",
     "工程实践_GPU-CPU混部_wechat_v2.html",
     "工程实践_GPU-CPU混部_wechat.html",
