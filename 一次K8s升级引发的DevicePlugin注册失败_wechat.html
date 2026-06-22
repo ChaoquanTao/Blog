@@ -19,15 +19,6 @@
 -->
 <div style="max-width:100%;margin:0 auto;background:#ffffff;">
 
-<!-- ===================== Hero ===================== -->
-<div style="background:#0f172a;padding:52px 28px 44px;text-align:center;">
-  <div style="display:inline-block;font-size:11px;letter-spacing:0.12em;color:#818cf8;background:#1e2542;border:1px solid #3b3f6b;padding:5px 16px;border-radius:20px;margin-bottom:22px;">KUBERNETES · 源码排查</div>
-  <div style="height:10px;"></div>
-  <p style="font-family:'STSong','SimSun',serif;font-size:28px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">一个 k8s device plugin<br>的<span style="color:#818cf8;">"坑"</span></p>
-  <p style="font-size:13px;color:#7b8190;letter-spacing:0.06em;margin:0;line-height:1.7;">代码一行没改，镜像还是同一个<br>只是集群版本变了，DaemonSet 就疯狂报错</p>
-  <div style="width:36px;height:2px;background:#6366f1;margin:22px auto 0;"></div>
-</div>
-
 <!-- ===================== 导语 ===================== -->
 <div style="padding:26px 22px 4px;">
   <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">最近把一个 Kubernetes 集群从旧版本升级到了新版本，集群里跑着一个自研的 device plugin（以 DaemonSet 形式部署）。<strong>升级前一切正常，升级后这个 DaemonSet 一启动就疯狂报错：</strong></p>
