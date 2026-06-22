@@ -355,24 +355,7 @@
   <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;padding-bottom:8px;border-bottom:2px solid #6366f1;">写在最后</span>
 </div>
 
-<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
-  <table cellpadding="0" cellspacing="0"><tr valign="top">
-    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div></td>
-    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>握手是双向的</strong>：插件主动 Register，但上报通道是 kubelet 反向连接插件。正确顺序永远是先 Start、再 Register。</p></td>
-  </tr></table>
-</div>
-<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
-  <table cellpadding="0" cellspacing="0"><tr valign="top">
-    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div></td>
-    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>不要依赖"未被承诺"的时序行为</strong>：旧版本的异步注册只是实现细节，不是契约。依赖外部系统时，依赖它承诺的契约，而非当前的实现时序。</p></td>
-  </tr></table>
-</div>
-<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:18px;">
-  <table cellpadding="0" cellspacing="0"><tr valign="top">
-    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div></td>
-    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>同步/异步的语义差异</strong>足以把潜伏的 bug 从"看不见"变成"必现"。异步用时间差掩盖顺序错误，同步则无情地暴露它。</p></td>
-  </tr></table>
-</div>
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 18px;text-align:justify;">这个 bug 本身很小，调换两行代码就好，但它串起来的几件事值得记一下：device plugin 的握手是双向的，插件主动 Register、kubelet 却反向连接插件，所以正确顺序永远是先 Start 再 Register；旧版本 kubelet 的"异步注册"从来不是契约，只是实现细节，我们的代码顺序本就是错的，只是被它意外兜住——依赖外部系统时，要依赖它承诺的契约，而不是它当前的实现时序；而这次的导火索，恰恰是一次 async → sync 的改动，异步用时间差掩盖了顺序错误，同步则把它无情地暴露出来。</p>
 
 <!-- Closing -->
 <div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0 0;text-align:center;">
@@ -384,7 +367,7 @@
 
 <!-- Footer -->
 <div style="margin-top:36px;padding-top:18px;border-top:1px solid #e2e8f0;">
-  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.8;">Kubernetes · Device Plugin · kubelet · gRPC · 源码排查 · 时序问题</p>
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.8;text-align:center;">Kubernetes · Device Plugin · kubelet · gRPC · 源码排查</p>
 </div>
 
 </div>
