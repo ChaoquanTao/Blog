@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>level-trigger OR edge-trigger</title>
+</head>
+<body>
+<!-- 主题：暗紫主题  navy:#0f172a indigo:#6366f1 indigo_light:#eef2ff purple:#8b5cf6 rose:#f43f5e -->
+<div style="max-width:100%;margin:0 auto;background:#ffffff;">
+
+<!-- ===================== Hero ===================== -->
+<div style="background:#0f172a;padding:52px 28px 44px;text-align:center;">
+  <div style="display:inline-block;font-size:11px;letter-spacing:0.12em;color:#818cf8;background:#1e1b4b;border:1px solid #3730a3;padding:5px 16px;border-radius:20px;margin-bottom:22px;">KUBERNETES · CONTROLLER 范式</div>
+  <div style="height:10px;"></div>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:25px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.03em;">level-trigger <span style="color:#818cf8;">OR</span> edge-trigger</p>
+  <p style="font-size:13px;color:rgba(255,255,255,0.45);letter-spacing:0.06em;margin:0;line-height:1.8;">从一个古老的触发哲学<br>读懂 Kubernetes controller 的开发范式</p>
+  <div style="width:36px;height:2px;background:#6366f1;margin:22px auto 0;"></div>
+</div>
+
+<!-- 正文容器 -->
+<div style="padding:30px 22px 10px;">
+
+<!-- ===================== 导语 ===================== -->
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:0 0 26px;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">写给谁看</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.85;margin:0;color:#334155;text-align:justify;">很多人从 <span style="font-family:'Courier New',monospace;font-size:13px;background:#e0e7ff;color:#4338ca;padding:1px 5px;border-radius:3px;">kubebuilder</span> 脚手架开始接触 controller，照着填 <span style="font-family:'Courier New',monospace;font-size:13px;background:#e0e7ff;color:#4338ca;padding:1px 5px;border-radius:3px;">Reconcile</span> 就能跑，但很快冒出一堆问号：为什么它不告诉我"发生了什么事件"？为什么要写得幂等？Finalizer 到底在防什么？这些问号都指向同一个源头。本文面向"会 Go、但没写过 controller"的工程师。</p>
+</div>
+
+<!-- ===================== 章节 01 ===================== -->
+<div style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;margin-right:10px;vertical-align:middle;">01</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;">两种触发哲学：edge 与 level</span>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">"触发"这个词，最早的精确定义来自数字电路。一个寄存器要在什么时候采样输入信号？这里有两种截然不同的设计：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">边沿触发 edge-triggered</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">在信号<strong>发生跳变的那一瞬间</strong>动作。关心的是"变化"这个<strong>事件</strong>本身——比如时钟从低到高的上升沿。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:18px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">电平触发 level-triggered</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">只要信号<strong>当前处于某个电平</strong>就持续动作。关心的是"现在是什么状态"，而<strong>不关心它是怎么变成这样的</strong>。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这组概念后来被借用到各种软件系统里。最为 Linux 工程师熟悉的，就是 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">epoll</span> 的两种模式：<span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">EPOLLET</span>（edge）只在"有新数据到达"那一刻通知你一次，没读干净剩下的不会再提醒；默认的 level 模式只要缓冲区里"还有数据没读完"就会一直通知。</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">用一个更生活化的比喻把差别讲透。假设你要看护一个水箱，<strong>不让它溢出</strong>：</p>
+
+<!-- 优缺点纵向卡 -->
+<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#6366f1;margin:0 0 6px;">⚡ edge 的做法</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">在警戒线上装传感器，水面<strong>越过警戒线那一瞬间</strong>发信号。你收到信号就跑过去放水。</p>
+</div>
+<div style="background:#f0fdfa;border:1px solid #99f6e4;border-radius:6px;padding:12px 16px;margin-bottom:18px;">
+  <p style="font-size:12px;font-weight:700;color:#0d9488;margin:0 0 6px;">🔁 level 的做法</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">不装传感器，每隔一段时间走过去<strong>看一眼</strong>——"现在水位是不是高于警戒线了？高了就放水，没高就走。"</p>
+</div>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">平时两种做法效果完全一样，差别要等到出意外时才显现。</p>
+</div>
+
+<!-- 分割线 -->
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===================== 章节 02 ===================== -->
+<div style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;margin-right:10px;vertical-align:middle;">02</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;">为什么 edge-triggered 这么脆弱</span>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">edge-triggered 看起来更"高级"也更省事——有事它叫你，没事你睡觉。问题在于，它的正确性建立在一个<strong>极其脆弱的前提</strong>上：</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:32px;color:#6366f1;line-height:1;margin:0 0 6px;opacity:0.7;">"</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">每一个事件都必须被可靠地捕捉到，一个都不能漏。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">而在真实世界里，这个前提<strong>永远不成立</strong>。我们看两个一定会发生的现实。</p>
+
+<div style="background:#fff1f2;border-left:4px solid #f43f5e;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#be123c;margin:0 0 8px;">现实一 · 信号会丢</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">传感器可能接触不良抖一下、你正忙没收到、网络丢了包。无论哪种，那个"越线事件"就<strong>永久地消失了</strong>。水位一直高着，但"越线"这个瞬间已经过去，再也不会有第二个事件提醒你。水箱静悄悄地溢了。</p>
+</div>
+<div style="background:#fff1f2;border-left:4px solid #f43f5e;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#be123c;margin:0 0 8px;">现实二 · 进程会重启</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">放到软件里，进程会崩溃、会被滚动升级、会被驱逐重调度。在你离线这段时间里发生的所有事件，你<strong>全部错过了</strong>。等你回来，世界已经变样，而你手里没有任何"这期间发生过什么"的记录。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">对 edge-triggered 来说这两个现实是<strong>致命的</strong>。它的整个工作模型就是"捕捉事件 → 响应事件"，一旦漏掉一环，系统就会<strong>永久地</strong>停在错误状态。翻译到业务代码里，就是这样一类 bug：</p>
+
+<!-- 代码框 -->
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:18px 0;overflow-x:auto;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.7;margin:0;white-space:pre;">监听 "Pod 删除" 事件  →  收到后重建一个 Pod</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">demo 里跑得很好。但只要接收服务重启一次、恰好错过某个 Pod 的删除事件，这个 Pod 就<strong>永远不会被重建</strong>了。没有报错，系统只是悄无声息地少了一个副本——而且<strong>难以复现</strong>，因为本地不会恰好在那个时刻重启。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:24px 0 8px;letter-spacing:0.05em;">// 信号丢失时，两者命运对比</p>
+<!-- 纵向时间线对比 -->
+<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:8px;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:13px;font-weight:700;color:#be123c;margin:0 0 6px;">❌ edge-triggered</p>
+  <p style="font-family:'Courier New',monospace;font-size:12px;color:#64748b;margin:0;line-height:1.8;">传感器发信号 → ✗ 信号丢了 → 之后再无新事件 → <strong style="color:#be123c;">水箱溢出</strong></p>
+</div>
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;margin-bottom:18px;">
+  <p style="font-size:13px;font-weight:700;color:#16a34a;margin:0 0 6px;">✅ level-triggered</p>
+  <p style="font-family:'Courier New',monospace;font-size:12px;color:#64748b;margin:0;line-height:1.8;">巡检正常 → 巡检正常 → <strong style="color:#16a34a;">巡检高了→放水</strong> → 巡检正常 → 下一轮自动纠正</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;text-align:justify;">level-triggered 根本不在乎"刚才发生了什么事件"。它每一轮都重新观察当前的全量状态、重新计算现在该做什么。漏掉一万个事件都没关系——只要再巡检一轮，看到"水位还是高的"，就会再放一次水。</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">代价是你得<strong>不停巡检</strong>，这是"轮询的代价"。但换来一个无比珍贵的性质——<strong>系统能从任意错误状态中自愈</strong>。漏了事件下一轮纠正，进程重启起来重看全量，状态读错下一轮再读就对了。</p>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">任何一个需要在不可靠环境里保证最终正确的控制系统，最终都会收敛到 level-triggered 上。这不是品味问题，而是在一个会丢事件、会重启的世界里，唯一站得住脚的选择。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===================== 章节 03 ===================== -->
+<div style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;margin-right:10px;vertical-align:middle;">03</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;">把 level-triggered 刻进基因的系统</span>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">Kubernetes 是一个<strong>声明式（declarative）</strong>系统：用户不写"怎么做"，只写"我要什么"。你提交一段 YAML 说"我要 3 个 nginx 副本"，这叫<strong>期望状态（desired state）</strong>；现在有几个、怎么变过去、节点挂了怎么补，都不归你管，系统自己想办法。</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">那"系统自己想办法"是谁在做？答案就是 <strong>controller（控制器）</strong>。</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;text-align:justify;">Controller 就是那个不断观察当前状态、和期望状态比较、采取行动消除差异的循环。它有一个更标准的名字：<strong>控制循环（control loop）</strong>。</p>
+
+<!-- pipeline -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 10px;">// 所有控制循环的形状都一样</p>
+  <p style="margin:0;line-height:2.4;text-align:center;">
+    <span style="display:inline-block;padding:6px 14px;border-radius:5px;font-size:13px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid #c7d2fe;">观察</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 14px;border-radius:5px;font-size:13px;font-weight:bold;background:#f5f3ff;color:#8b5cf6;border:1px solid #ddd6fe;">比较</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 14px;border-radius:5px;font-size:13px;font-weight:bold;background:#0f172a;color:#ffffff;">纠偏</span>
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这些控制循环跑在一个<strong>会丢事件、会重启</strong>的分布式环境里：API Server 会重启，controller 会被升级重调度，watch 长连接会断开重连。要保证"最终正确"，答案我们已经推过了——<strong>它必须是 level-triggered 的</strong>。</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:32px;color:#6366f1;line-height:1;margin:0 0 6px;opacity:0.7;">"</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">不要响应事件，而要调谐状态（reconcile）。永远拿当前的全量状态去和期望比较，把差异消除掉；不要去关心"刚才发生了哪个事件"。</p>
+</div>
+
+<!-- 误解 callout -->
+<div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">先澄清一个误解</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;">controller 明明靠 watch 监听对象变化工作，那它不就是 edge-triggered 吗？</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;"><strong>watch 事件只是性能优化，不是决策依据。</strong>它只是敲一下你的肩膀："<span style="font-family:'Courier New',monospace;font-size:12px;background:#fde6d3;color:#c2410c;padding:1px 4px;border-radius:3px;">default/my-app</span> 这个对象可能变了，你该去看一眼了。"收到提醒后，controller <strong>并不处理这个事件</strong>，而是拿着名字重新读取它当前的完整状态、重新调谐一遍。事件丢了也没关系，还有<strong>定期全量重新同步（resync）</strong>兜底。</p>
+</div>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">事件用来触发，状态用来决策。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===================== 章节 04 ===================== -->
+<div style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;margin-right:10px;vertical-align:middle;">04</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;">范式落地：七个要点</span>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">挂在主线上的七个要点，每一个<strong>要么是范式逼出来的硬约束，要么是 Kubernetes 为了让你更容易遵守它提供的便利</strong>。</p>
+
+<!-- 七要点编号卡 -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>Reconcile</strong>：为什么它只接收一个 key</p></div>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0 14px;text-align:justify;">用 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">controller-runtime</span> 框架，你要写的核心就是一个 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">Reconcile</span> 函数。最值得玩味的是入参 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">ctrl.Request</span>，它里面<strong>只有一样东西</strong>：对象的 key，也就是 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">namespace/name</span>。</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:18px 0;overflow-x:auto;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.7;margin:0;white-space:pre;"><span style="color:#818cf8;">func</span> (r *FooReconciler) Reconcile(
+    ctx context.Context, req ctrl.Request,
+) (ctrl.Result, <span style="color:#818cf8;">error</span>)
+
+<span style="color:#64748b;">// req 里只有 {Namespace, Name}，没有事件类型</span></p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">它<strong>不接收事件类型</strong>。没有"这是 Create 还是 Update 还是 Delete"，框架只告诉你一句话——"<span style="font-family:'Courier New',monospace;font-size:12px;background:#e0e7ff;color:#4338ca;padding:1px 4px;border-radius:3px;">default/my-app</span> 这个对象，你该看一眼了。"这正是 level-triggered 在 API 层面的直接体现：<strong>框架不告诉你"发生了什么"，只告诉你"该看谁"。</strong></p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:20px 0 8px;letter-spacing:0.05em;">// reconcile 的标准四步骨架</p>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+  <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 2px;">① 读期望对象</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">重新观察当前全量状态（level-triggered）</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#8b5cf6;margin:0 0 2px;">② 处理删除 / finalizer</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">对象正在被删？先做临终清理</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#16a34a;margin:0 0 2px;">③ 确保子资源存在</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">ensure 而非 create（幂等）</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#0f172a;border-radius:6px;padding:10px 14px;text-align:center;">
+    <p style="font-size:13px;font-weight:700;color:#ffffff;margin:0;">④ 回填 status，向用户汇报实际状态</p>
+  </div>
+</div>
+
+<!-- 要点2 幂等 -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin:26px 0 8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>幂等 idempotency</strong>：被 level-triggered 逼出的第二条铁律</p></div>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:14px 0 18px;line-height:1.9;text-align:justify;">同一段逻辑，对同一个状态，跑 1 次和跑 100 次，结果必须完全一致。</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">既然 controller 每一轮都重新观察、重新执行，那么同一对象的 reconcile 逻辑会被<strong>反复地、不确定次数地执行</strong>：风平浪静时每 10 分钟 resync 一次，状态频繁变化时 1 秒触发好几次，崩溃重启后把所有对象从头跑一遍。如果你写成"每跑一次就创建一个 Pod"，100 次 reconcile 就会创建 100 个 Pod——灾难。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:20px 0 8px;letter-spacing:0.05em;">// 幂等写法：ensure 一个符合期望的 Pod</p>
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:0 0 18px;overflow-x:auto;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#e2e8f0;line-height:1.8;margin:0;white-space:pre;">不存在        → 创建
+已存在但不对   → 更新
+已存在且正确   → 什么都不做</p>
+</div>
+
+<div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">一枚硬币的两面</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">level-triggered 决定了"逻辑会被重复执行"，幂等保证了"重复执行不会出乱子"。</p>
+</div>
+
+<!-- 要点3 Informer -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin:26px 0 8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>Informer / Cache</strong>：每轮都读全量，API Server 受得了吗</p></div>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0 14px;text-align:justify;">先交代 <strong>API Server</strong> 是什么：它是整个集群<strong>唯一的入口</strong>。所有对象都存在一个叫 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">etcd</span> 的数据库里，<strong>谁都不能直接碰 etcd</strong>，所有读写都必须经过 API Server 这道门。<span style="font-family:'Courier New',monospace;font-size:12px;background:#e0e7ff;color:#4338ca;padding:1px 4px;border-radius:3px;">kubectl</span>、kubelet、controller 全都是它的客户端。</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:18px 0;overflow-x:auto;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#e2e8f0;line-height:1.7;margin:0;white-space:pre;">   kubectl ──┐
+   controller ┼──►  <span style="color:#818cf8;">API Server</span>  ──►  <span style="color:#34d399;">etcd</span>
+   kubelet ──┘     （唯一入口/门卫）   ◄── （真正存数据）
+
+   所有读写都得走这道门，etcd 不对外直接开放</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">最朴素的实现是每次 reconcile 都向 API Server 发 GET/LIST。但<strong>API Server 扛不住</strong>：几十个 controller、成千上万个对象，每次都去打它，会被读请求压垮。解决方案是 <strong>Informer</strong>（背后是本地 <strong>Cache</strong>），机制是经典的 <strong>List + Watch</strong>：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">① List</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">启动时拉一次某类资源的全量列表，灌进本地内存缓存。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">② Watch</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">建立长连接，API Server 把后续增量变化持续推过来，实时更新本地缓存。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:18px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">③ 读缓存</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">reconcile 里读对象时读的是本地缓存，<strong>根本不碰 API Server</strong>。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这就把"成千上万次读 API Server"压缩成了"一次 List + 一条 Watch 长连接"。</p>
+
+<div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">代价 · 短暂陈旧 stale</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">本地缓存可能短暂陈旧——API Server 上对象已变，但 Watch 事件还在路上。<strong>但读到旧数据无所谓</strong>：缓存马上会被更新，更新又触发一次 reconcile，下一轮就读到新值。陈旧状态会被下一次 reconcile 自愈——这正是 level-triggered + 幂等大显身手的地方。</p>
+</div>
+
+<!-- 要点4 WorkQueue -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin:26px 0 8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">4</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>WorkQueue</strong>：把"惊群"压平</p></div>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0 14px;text-align:justify;"><strong>惊群（thundering herd）</strong>：一件事发生时一大群对象同时被惊动、一拥而上——就像往鸽群里扔面包，所有鸽子哗地全飞过来。典型场景有两类：某个对象极短时间内被改几十次；或 controller 刚启动/刚重连时，缓存里成千上万个对象"看起来全都变了"。Informer 收到变化后并不直接调用 <span style="font-family:'Courier New',monospace;font-size:12px;background:#e0e7ff;color:#4338ca;padding:1px 4px;border-radius:3px;">Reconcile</span>，而是先把 key 塞进 <strong>WorkQueue</strong>，中间隔这一层是为了三件事——而这三件事<strong>只有 level-triggered 才敢这么干</strong>：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:22px;height:22px;background:#8b5cf6;border-radius:50%;text-align:center;line-height:22px;"><span style="font-size:11px;font-weight:700;color:#ffffff;">A</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;line-height:1.65;margin:0;"><strong>去重 dedup。</strong>同一对象短时间变 50 次，不会触发 50 次。队列维护一个 dirty 集合，正在处理时新事件只把它标为 dirty，处理完再重跑一轮。敢这么合并，正因为 level-triggered 根本不关心那 50 个事件分别是什么。</p></div>
+  </div>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:22px;height:22px;background:#8b5cf6;border-radius:50%;text-align:center;line-height:22px;"><span style="font-size:11px;font-weight:700;color:#ffffff;">B</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;line-height:1.65;margin:0;"><strong>限速 rate limiting。</strong>控制 reconcile 速率，防止某个频繁抖动的对象把 worker 和 API Server 压垮。</p></div>
+  </div>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:18px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:22px;height:22px;background:#8b5cf6;border-radius:50%;text-align:center;line-height:22px;"><span style="font-size:11px;font-weight:700;color:#ffffff;">C</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;line-height:1.65;margin:0;"><strong>失败重试 + 指数退避。</strong>reconcile 返回 error 时框架把 key 重新入队，退避时间逐次翻倍（示意：1s→2s→4s…）。既保证"出错的对象最终会被重试到成功"，又不会持续失败时把 API Server 拖垮。</p></div>
+  </div>
+</div>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">你的 Reconcile 只要"返回 error"就行——重试、退避、去重，框架全替你兜住了。</p>
+</div>
+
+<!-- 要点5 OwnerReference -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin:26px 0 8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">5</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>OwnerReference</strong>：级联删除与反向触发</p></div>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0 14px;text-align:justify;">controller 通常会为它管理的对象创建<strong>子资源</strong>（比如 <span style="font-family:'Courier New',monospace;font-size:12px;background:#e0e7ff;color:#4338ca;padding:1px 4px;border-radius:3px;">Foo</span> controller 为每个 Foo 创建一个 Deployment）。两个需求都靠 <strong>OwnerReference（属主引用）</strong> 解决：</p>
+
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">级联垃圾回收 cascading GC</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">GC 器看到"属主 Foo 没了"，会自动回收所有以它为 owner 的子资源。你不用写一行删除代码。</p>
+</div>
+<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:12px 16px;margin-bottom:18px;">
+  <p style="font-size:12px;font-weight:700;color:#7c3aed;margin:0 0 6px;">反向触发（controller-runtime 里叫 Owns）</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">声明 <span style="font-family:'Courier New',monospace;font-size:12px;background:#e9e3ff;color:#6d28d9;padding:1px 4px;border-radius:3px;">Owns(&Deployment{})</span> 后，某个带 Foo 属主引用的 Deployment 变了（比如被人删了），框架就把<strong>它属主 Foo 的 key</strong> 塞进 WorkQueue，触发 Foo 的 reconcile。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;text-align:justify;">子资源被人动了 → 触发属主重新 reconcile → 属主重新观察"子资源还在不在、对不对" → 不对就修。你不需要写"监听删除事件然后重建"这种脆弱逻辑，只需在 reconcile 里幂等地 ensure 子资源存在。</p>
+
+<!-- 要点6 Finalizer -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin:26px 0 8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">6</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>Finalizer</strong>：删除前的临终清理</p></div>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0 14px;text-align:justify;">级联 GC 能回收<strong>集群内</strong>的子资源。但如果你的 controller 在<strong>集群外</strong>也分配了东西呢——云厂商的负载均衡器、外部数据库的一条记录、对象存储的一个 bucket？用户删对象时 GC 管不到这些，对象一从 etcd 消失，你就<strong>再也没机会</strong>释放它们了。<strong>Finalizer（终结器）</strong> 就是为此而生的"临终清理"钩子：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+  <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 2px;">① 用户 delete</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">deletionTimestamp 被设置，对象进入 Terminating 但不消失</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#8b5cf6;margin:0 0 2px;">② reconcile 检测到 deletionTimestamp != nil</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">执行外部资源清理（释放 LB / 删记录 / …）</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#ea580c;margin:0 0 2px;">③ 移除自己的 finalizer</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">清理成功后把标记摘掉</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#0f172a;border-radius:6px;padding:10px 14px;text-align:center;">
+    <p style="font-size:13px;font-weight:700;color:#ffffff;margin:0;">finalizers 空了 → Kubernetes 真正删除对象</p>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:18px 0 14px;text-align:justify;"><strong>这是 controller 里最容易出 bug 的地方</strong>，原因还是那两条铁律：</p>
+
+<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">✗ 清理必须幂等</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">reconcile 可能在"清理"和"移除 finalizer"之间崩溃重启，重启后又重进清理逻辑。"释放外部资源"必须能安全跑第二次。</p>
+</div>
+<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:12px 16px;margin-bottom:18px;">
+  <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">✗ 对 NotFound 宽容</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">要删的外部资源"本来就不存在了"不能当成错误，否则 finalizer 永远移不掉，对象<strong>永远卡在 Terminating</strong>。正确写法：删，如果返回 NotFound，当作成功。</p>
+</div>
+
+<!-- 要点7 Status -->
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin:26px 0 8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">7</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>Status 与 Conditions</strong>：对外的单一事实源</p></div>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:14px 0 14px;text-align:justify;"><span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">spec</span> 和 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #ddd6fe;">status</span> 的分工正好对应控制循环的两端：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:12px 16px;margin:8px 0 8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">spec · 期望状态</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">由<strong>用户</strong>写，是控制循环的<strong>输入</strong>。用户只动 spec。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:12px 16px;margin:0 0 18px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">status · 实际状态</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">由 <strong>controller</strong> 写，是控制循环的<strong>输出</strong>。用户只读不写。</p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:20px 0 8px;letter-spacing:0.05em;">// kubectl get foo my-app -o yaml（节选）</p>
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:0 0 18px;overflow-x:auto;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#e2e8f0;line-height:1.7;margin:0;white-space:pre;">metadata:
+  generation: 2          <span style="color:#64748b;"># 改一次 spec +1</span>
+spec:                     <span style="color:#818cf8;"># 用户写：我想要什么</span>
+  replicas: 3
+  image: nginx:1.27
+status:                   <span style="color:#34d399;"># controller 写：实际怎么样</span>
+  observedGeneration: 2   <span style="color:#64748b;"># 已处理到 gen=2</span>
+  conditions:
+  - type: Ready
+    status: "True"        <span style="color:#64748b;"># True/False/Unknown</span>
+    reason: AllReplicasReady
+    message: "3/3 replicas available"</span></p>
+</div>
+
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">三个要点</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;"><strong>① status 是对外的单一事实源。</strong>别人想知道"对象现在怎么样"只看 status，常用结构化的 <strong>Conditions</strong>（type / status / reason / message）表达健康与进度。</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;"><strong>② observedGeneration 判断 status 是否跟上最新 spec。</strong><span style="font-family:'Courier New',monospace;font-size:12px;background:#e0e7ff;color:#4338ca;padding:1px 4px;border-radius:3px;">observedGeneration &lt; generation</span> 说明 controller 还没处理你最新的改动。</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;"><strong>③ spec 与 status 走不同子资源更新。</strong>更新 spec 用 <span style="font-family:'Courier New',monospace;font-size:12px;background:#e0e7ff;color:#4338ca;padding:1px 4px;border-radius:3px;">Update</span>，更新 status 用 <span style="font-family:'Courier New',monospace;font-size:12px;background:#e0e7ff;color:#4338ca;padding:1px 4px;border-radius:3px;">Status().Update()</span>，两者互不覆盖——保证"用户意图"与"controller 汇报"井水不犯河水。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===================== 章节 05 ===================== -->
+<div style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;margin-right:10px;vertical-align:middle;">05</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;">三条纪律：先在脑子里装一句话</span>
+</div>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:18px 0 22px;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:32px;color:#6366f1;line-height:1;margin:0 0 6px;opacity:0.7;">"</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">不要问"发生了什么，我该做什么反应"；要问"现在是什么样，期望是什么样，我怎么把前者变成后者"。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">每当你想写下 <span style="font-family:'Courier New',monospace;font-size:12px;background:#fee2e2;color:#be123c;padding:1px 5px;border-radius:3px;">if 收到删除事件 { ... }</span> 时，停下来——这是 edge-triggered 思维在作祟。正确姿势永远是：<strong>读全量、算差异、消差异</strong>。展开就是三条纪律：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>决策只依赖"当前读到的状态"</strong>，绝不依赖"我是被什么触发的"。Reconcile 从头到尾都不该关心自己为什么被调用。</p></div>
+  </div>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>每个写操作都是"ensure"，不是"do once"。</strong>创建、更新、删除，都要能安全地重复执行——因为它一定会被重复执行。</p></div>
+  </div>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:18px;">
+  <div style="overflow:hidden;">
+    <div style="float:left;margin-right:10px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div></div>
+    <div style="overflow:hidden;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>把每一种中途崩溃都想一遍。</strong>"如果我在这一行之后、下一行之前挂掉，重启后重进 reconcile，会出乱子吗？"如果会，说明这段还不够幂等。</p></div>
+  </div>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===================== 章节 06 ===================== -->
+<div style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;margin-right:10px;vertical-align:middle;">06</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;vertical-align:middle;">骨架代码：把七个要点串起来</span>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:0 0 8px;letter-spacing:0.05em;">// main：用 Builder 声明式搭出控制循环</p>
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:0 0 18px;overflow-x:auto;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#e2e8f0;line-height:1.7;margin:0;white-space:pre;">ctrl.NewControllerManagedBy(mgr).
+  For(&v1.Foo{}).             <span style="color:#64748b;"># 主资源 Foo 变了→入队</span>
+  Owns(&appsv1.Deployment{}). <span style="color:#64748b;"># 子资源变了→反向触发属主</span>
+  Complete(&FooReconciler{...})
+
+<span style="color:#64748b;"># 声明"看谁"，而不是"处理什么事件"
+# 生产必开 LeaderElection：只有 leader 跑 reconcile</span></p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:20px 0 8px;letter-spacing:0.05em;">// Reconcile 主干：四步骨架</p>
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:0 0 18px;overflow-x:auto;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#e2e8f0;line-height:1.7;margin:0;white-space:pre;"><span style="color:#818cf8;">// ❶ 读期望对象（level-triggered）</span>
+var foo v1.Foo
+if err := r.Get(ctx, req.NamespacedName, &foo); err != nil {
+    return ctrl.Result{}, client.IgnoreNotFound(err) <span style="color:#64748b;">// 对 NotFound 宽容</span>
+}
+
+<span style="color:#818cf8;">// ❷ 处理删除 / finalizer</span>
+if !foo.DeletionTimestamp.IsZero() {
+    if ContainsFinalizer(&foo, finalizer) {
+        if err := r.cleanupExternal(ctx, &foo); err != nil {
+            return ctrl.Result{}, err   <span style="color:#64748b;">// 失败→指数退避重试</span>
+        }
+        RemoveFinalizer(&foo, finalizer)
+        r.Update(ctx, &foo)
+    }
+    return ctrl.Result{}, nil
+}
+
+<span style="color:#818cf8;">// ❸ 确保子资源存在（ensure 而非 create，整段幂等）</span>
+if err := r.ensureDeployment(ctx, &foo); err != nil {
+    return ctrl.Result{}, err
+}
+
+<span style="color:#818cf8;">// ❹ 回填 status，走 /status 子资源</span>
+foo.Status.ObservedGeneration = foo.Generation
+r.Status().Update(ctx, &foo)
+return ctrl.Result{}, nil</span></p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:20px 0 8px;letter-spacing:0.05em;">// ensureDeployment：幂等收敛的核心动作</p>
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:0 0 18px;overflow-x:auto;">
+  <p style="font-family:'Courier New',Courier,monospace;font-size:12px;color:#e2e8f0;line-height:1.7;margin:0;white-space:pre;"><span style="color:#64748b;">// CreateOrUpdate 是幂等的关键：
+//   不存在→创建  已存在→有 diff 才更新  无 diff→什么都不做</span>
+controllerutil.CreateOrUpdate(ctx, r.Client, dep, func() error {
+    dep.Spec.Replicas = foo.Spec.Replicas
+    dep.Spec.Template = buildPodTemplate(foo)
+    <span style="color:#64748b;">// 设置 OwnerReference：级联 GC + 反向触发，二合一</span>
+    return SetControllerReference(foo, dep, r.Scheme)
+})</span></p>
+</div>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">整份代码里找不到一处"监听某事件 → 做某动作"的影子。所有逻辑都是"读当前状态 → ensure 成期望的样子"。这就是范式本身。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===================== 收尾 ===================== -->
+<p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:30px 0 16px;">写在最后</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">回到开篇的二选一：<strong>level-trigger OR edge-trigger?</strong> 对 Kubernetes controller 来说，这根本不是一道选择题。在一个会丢事件、会重启的世界里，edge-triggered 那种"捕捉事件 → 响应事件"的模型天生脆弱——漏一个事件就可能永久停在错误状态；而 level-triggered "每轮重读全量、重算差异"能从任意错误中自愈。</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">后半篇讲的所有东西——Reconcile 只收 key、幂等、Informer/Cache、WorkQueue、OwnerReference、Finalizer、Status/Conditions——没有一个是孤立的"知识点"。它们要么是 level-triggered 逼出的<strong>硬约束</strong>，要么是 Kubernetes 为了让你更容易遵守它铺的<strong>便利设施</strong>。</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0 0;text-align:center;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:rgba(255,255,255,0.75);line-height:2;margin:0;">真正要记住的只有一句话：<br><strong style="color:#818cf8;">不要响应事件，要调谐状态。</strong><br><br>把它装进脑子，你再看任何 controller 源码，<br>都能立刻问出那个对的问题——<br>它在把什么 actual 调谐到什么 desired？</p>
+</div>
+
+<!-- Footer -->
+<div style="margin-top:44px;padding-top:18px;border-top:1px solid #e2e8f0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.8;">Kubernetes · Controller · level-triggered · 调谐 reconcile · 云原生</p>
+</div>
+
+</div><!-- /正文容器 -->
+</div>
+</body>
+</html>

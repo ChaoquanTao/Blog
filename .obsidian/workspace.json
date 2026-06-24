@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "20260529-一次Kubernetes升级引发的DevicePlugin注册失败.md",
+                "file": "20260622-level-trigger-or-edge-trigger.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "20260529-一次Kubernetes升级引发的DevicePlugin注册失败"
+              "title": "20260622-level-trigger-or-edge-trigger"
             }
           }
         ]
@@ -78,7 +78,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 226.5
+    "width": 200
   },
   "right": {
     "id": "d35bbeb7d3459768",
@@ -185,10 +185,13 @@
   },
   "active": "87b8775ad59a8121",
   "lastOpenFiles": [
+    "level-trigger-or-edge-trigger_wechat.html",
+    "20260503-浅谈Go语言中的Channel.md",
+    "20260622-level-trigger-or-edge-trigger.md",
+    "20260622-k8s controller开发范式.md",
+    "20260529-一次Kubernetes升级引发的DevicePlugin注册失败.md",
     "一次K8s升级引发的DevicePlugin注册失败_wechat.html",
     "Untitled.canvas",
-    "20260622-k8s controller开发范式.md",
-    "20260622-level-trigger-or-edge-trigger.md",
     "20191010-一次由继承引发的思考.md",
     "k8s-controller-development-paradigm.md",
     "messenger_social_v2.gif",
@@ -224,13 +227,10 @@
     "20190905-谈一谈Java中的集合类.md",
     "20221022-聊一聊限流之guava限流器.md",
     "20230525-聊一聊linux中的tc命令.md",
-    "20220706-聊一聊DelayQueue.md",
-    "20190605-类加载机制.md",
     "images",
     "工程实践_GPU-CPU混部_wechat_v2.html",
     "工程实践_GPU-CPU混部_wechat.html",
     "2026-06-04-工程实践：实现单机GPU-CPU混部.md.tmp.56457.827c9450505b",
-    "2026-06-04-工程实践：实现单机GPU-CPU混部.md.tmp.56457.586fea5a2cd6",
-    "2026-06-04-工程实践：实现单机GPU-CPU混部.md.tmp.56457.e89fe0082517"
+    "2026-06-04-工程实践：实现单机GPU-CPU混部.md.tmp.56457.586fea5a2cd6"
   ]
 }

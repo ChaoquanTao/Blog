@@ -27,7 +27,7 @@ tags:
 
 这组概念后来被借用到了各种软件系统里。最为 Linux 工程师熟悉的，就是 `epoll` 的两种模式：`EPOLLET`（edge-triggered）只在"有新数据到达"的那一刻通知你一次，你要是没一次读干净，剩下的数据它不会再提醒；而默认的 level-triggered 模式只要缓冲区里"还有数据没读完"就会一直通知你。
 
-抛开电路和 `epoll`，我们用一个更生活化的比喻把这两种哲学的差别钉死。假设你要看护一个水箱，**不让它溢出**：
+抛开电路和 `epoll`，我们用一个更生活化的比喻把这两种哲学的差别讲透。假设你要看护一个水箱，**不让它溢出**：
 
 - **edge-triggered 的做法**：在警戒线上装一个传感器，水面**越过警戒线的那一瞬间**给你发一个信号。你收到信号，就跑过去放水。
 - **level-triggered 的做法**：你不装传感器，而是每隔一段时间走过去**看一眼**——"现在水位是不是高于警戒线了？高了就放水，没高就走人。"
@@ -56,7 +56,7 @@ edge-triggered 看起来更"高级"也更省事——不用反复巡检，有事
 监听 "Pod 删除" 事件  →  收到后重建一个 Pod
 ```
 
-这段逻辑在 demo 里跑得很好。但只要你的服务重启一次，恰好错过了某个 Pod 的删除事件，这个 Pod 就**永远不会被重建**了。没有报错，没有崩溃，系统只是悄无声息地少了一个副本，直到某天有人发现容量不对。更隐蔽的是它**难以复现**——本地测不出来，因为本地不会恰好在那个时刻重启。
+这段逻辑在 demo 里跑得很好。但只要你的接收服务重启一次，恰好错过了某个 Pod 的删除事件，这个 Pod 就**永远不会被重建**了。没有报错，没有崩溃，系统只是悄无声息地少了一个副本，直到某天有人发现容量不对。更隐蔽的是它**难以复现**——本地测不出来，因为本地不会恰好在那个时刻重启。
 
 用一张时间线把两者在"信号丢失"时的命运对比一下：
 
@@ -78,7 +78,7 @@ edge-triggered 看起来更"高级"也更省事——不用反复巡检，有事
 
 > 它根本不在乎"刚才发生了什么事件"。它每一轮都**重新观察当前的全量状态，重新计算现在该做什么**。漏掉一万个事件都没关系——只要它再巡检一轮，看到"水位还是高的"，就会再放一次水。
 
-代价当然是有的：你得**不停地巡检**，哪怕大多数时候啥事没有，这是一种"轮询税"。但换来的是一个无比珍贵的性质——**系统能从任意错误状态中自愈**。漏了事件？下一轮纠正。进程重启了？起来重新看一遍全量，该补的补、该删的删。状态读错了？下一轮再读一次就对了。
+代价当然是有的：你得**不停地巡检**，哪怕大多数时候啥事没有，这是一种"轮询的代价"。但换来的是一个无比珍贵的性质——**系统能从任意错误状态中自愈**。漏了事件？下一轮纠正。进程重启了？起来重新看一遍全量，该补的补、该删的删。状态读错了？下一轮再读一次就对了。
 
 这就是为什么，**任何一个需要在不可靠环境里保证最终正确的控制系统，最终都会收敛到 level-triggered 上**。这不是品味问题，而是在一个会丢事件、会重启的世界里，唯一能站得住脚的选择。
 
@@ -102,11 +102,11 @@ Kubernetes 里跑着几十个这样的循环，各管一摊：Deployment control
 
 > **不要响应事件，而要调谐状态（reconcile）。** 永远拿当前的全量状态去和期望比较，把差异消除掉；不要去关心"刚才发生了哪个事件"。
 
-这一句话听起来简单，但它像一条主梁，把后面所有的工程构件都串了起来。下面我们一个一个看——你会发现，**每一个构件要么是这条范式逼出来的硬约束，要么是 Kubernetes 为了让你更容易遵守它而提供的便利**。
+这一句话听起来简单，但它像一条主梁，把后面所有的工程构件都串了起来。不过在拆解这些构件之前，得先澄清一个常见的误解。
 
 ### 一个先澄清的误解：controller 不是用 watch 监听事件吗？
 
-讲细节之前，先拆掉一个几乎人人都会有的疑惑："controller 明明是靠 watch 监听对象变化来工作的，那它不就是 edge-triggered 吗？"
+很多人第一反应是：controller 明明靠 watch 监听对象变化来工作，那它不就是 edge-triggered 吗？
 
 答案是：**watch 事件只是一个性能优化，不是决策依据。** 它的作用仅仅是敲一下你的肩膀："嘿，`default/my-app` 这个对象可能变了，你该去看一眼了。" controller 收到这个提醒后，**并不去处理这个事件**，而是拿着对象的名字**重新读取它当前的完整状态，重新调谐一遍**。事件丢了也没关系，因为还有**定期的全量重新同步（resync）**在背后兜底——每隔一段时间，所有对象都会被重新过一遍。
 
@@ -115,9 +115,13 @@ Kubernetes 里跑着几十个这样的循环，各管一摊：Deployment control
                                           决策永远基于「当前完整状态」
 ```
 
-把这句话刻在脑子里，你就抓住了 controller 的灵魂：**事件用来触发，状态用来决策。** 接下来的每个构件，都是这句话的注脚。
+把这句话刻在脑子里，你就抓住了 controller 的灵魂：**事件用来触发，状态用来决策。**
 
-## 四、Reconcile：为什么它只接收一个 key
+## 四、范式落地：七个要点
+
+下面我们把挂在这条主线上的七个要点一个一个拆开看——Reconcile、幂等、Informer/Cache、WorkQueue、OwnerReference、Finalizer、Status/Conditions。你会发现，**每一个要么是这条范式逼出来的硬约束，要么是 Kubernetes 为了让你更容易遵守它而提供的便利**。
+
+### Reconcile：为什么它只接收一个 key
 
 在实际开发中（用 `controller-runtime` 框架），你要写的核心就是一个 `Reconcile` 函数，签名长这样：
 
@@ -148,9 +152,11 @@ type Request struct {
 4. 回填 status          ← 向用户汇报实际状态
 ```
 
-## 五、幂等（idempotency）：被 level-triggered 逼出来的第二条铁律
+### 幂等（idempotency）：被 level-triggered 逼出来的第二条铁律
 
 level-triggered 还会顺手逼出另一条铁律。
+
+> **幂等（idempotency）：同一段逻辑，对同一个状态，跑 1 次和跑 100 次，结果必须完全一致。**
 
 既然 controller 每一轮都重新观察、重新执行，那么**同一个对象的 reconcile 逻辑，会被反复地、不确定次数地执行**:
 
@@ -158,9 +164,7 @@ level-triggered 还会顺手逼出另一条铁律。
 - 状态频繁变化时，它可能 1 秒内被触发好几次；
 - 它崩溃重启后，会把所有对象从头 reconcile 一遍。
 
-如果你的逻辑写成"每跑一次就创建一个 Pod"，那 100 次 reconcile 就会创建 100 个 Pod——灾难。所以必然要求：
-
-> **幂等（idempotency）：同一段逻辑，对同一个状态，跑 1 次和跑 100 次，结果必须完全一致。**
+如果你的逻辑写成"每跑一次就创建一个 Pod"，那 100 次 reconcile 就会创建 100 个 Pod——灾难。所以必然要求幂等。
 
 幂等的写法不是"创建一个 Pod"，而是"**确保（ensure）**存在一个符合期望的 Pod":
 
@@ -172,11 +176,25 @@ level-triggered 还会顺手逼出另一条铁律。
 
 注意它和控制循环本来就是一回事：**永远先观察、再决定动作；动作的目标是"消除差异"，而不是"执行一次操作"。** level-triggered 和幂等，本质上是一枚硬币的两面——前者决定了"逻辑会被重复执行"，后者保证了"重复执行不会出乱子"。
 
-## 六、Informer / Cache：每轮都读全量，API Server 受得了吗
+### Informer / Cache：每轮都读全量，API Server 受得了吗
+
+在往下讲之前，先花一句话交代 **API Server** 是什么——后面会反复提到它。它是整个集群**唯一的入口**：集群里所有对象（Pod、Deployment、你的 Foo……）都存在一个叫 **etcd** 的数据库里，而**谁都不能直接碰 etcd**，所有的读和写都必须经过 API Server 这道门。你敲的 `kubectl`、每个节点上的 kubelet、还有我们正在讲的 controller，全都是它的客户端。
+
+```
+       kubectl ──┐
+                 │
+   controller ──┼──►  ┌────────────┐  ──►  ┌────────┐
+                 │     │ API Server │       │  etcd  │  ← 真正存数据的地方
+      kubelet ──┘     └────────────┘  ◄──  └────────┘
+                       (唯一入口/门卫)
+        所有读写都得走这道门,etcd 不对外直接开放
+```
+
+正因为它是**唯一入口**，所有流量都压在它身上——这就是下面这个问题的由来。
 
 第三节说，controller 每轮都要"重新观察当前全量状态"。最朴素的实现是：每次 reconcile 都向 API Server 发一个 GET/LIST。
 
-但这里有个致命问题：**API Server 扛不住。** 集群里几十个 controller、成千上万个对象，如果每次 reconcile、每次 resync 都去打 API Server，它会被读请求活活淹死。
+但这里有个致命问题：**API Server 扛不住。** 集群里几十个 controller、成千上万个对象，如果每次 reconcile、每次 resync 都去打 API Server，它会被读请求压垮。
 
 解决方案是 **Informer**（背后是一个本地 **Cache / 缓存**）。机制是经典的 **List + Watch**:
 
@@ -203,19 +221,21 @@ level-triggered 还会顺手逼出另一条铁律。
 
 但这正好是 level-triggered + 幂等大显身手的地方：**读到旧数据无所谓。** 因为缓存马上会被更新，更新又会触发一次 reconcile，下一轮你就读到新值、重新纠正了。陈旧状态会被**下一次 reconcile 自愈**。要是换成 edge-triggered，一次读错就可能永久错下去；而 level-triggered 把"短暂读旧"变成了一个无害的、自动修复的小插曲。
 
-## 七、WorkQueue：把"惊群"压平
+### WorkQueue：把"惊群"压平
+
+先解释下标题里的**惊群（thundering herd）**：它原指"一件事发生时，一大群原本在等待的对象**同时被惊动、一拥而上**"——就像往鸽群里扔一块面包，所有鸽子哗地一下全飞过来抢，场面瞬间失控。放到 controller 这里，典型场景有两类：一是**某一个对象在极短时间内被改了几十次**，每次变化都想触发一次 reconcile；二是 controller **刚启动或刚重连**时，缓存里成千上万个对象"看起来全都变了"，瞬间涌出海量待处理任务。如果来一个就立刻处理一个，worker 和 API Server 会被这股洪峰冲垮。
 
 Informer 收到变化后，并不直接调用 `Reconcile`，而是先把对象的 key 塞进一个 **WorkQueue（工作队列）**，再由 worker 协程从队列里取 key 来处理。中间隔这一层队列，是为了三件事——而这三件事，**只有 level-triggered 才敢这么干**:
 
 1. **去重（dedup）。** 同一个对象短时间内变了 50 次，不会触发 50 次 reconcile。队列内部维护了一个 dirty 集合：某个 key 正在被处理时，新事件只把它**标记为 dirty**，等处理完再重新入队跑一轮。最终 50 次变化可能只合并成两三次 reconcile，每次都读当前最新状态。敢这么合并，正是因为 level-triggered **根本不关心那 50 个事件分别是什么**，只关心当前状态——合并完全没有信息损失。
 
-2. **限速（rate limiting）。** 队列能控制 reconcile 的速率，防止某个疯狂抖动的对象把 worker 和 API Server 打爆。
+2. **限速（rate limiting）。** 队列能控制 reconcile 的速率，防止某个频繁抖动的对象把 worker 和 API Server 压垮。
 
-3. **失败重试 + 指数退避（exponential backoff）。** reconcile 返回 error 时，框架把这个 key **重新入队**，且退避时间逐次翻倍（1s → 2s → 4s → …）。既保证"出错的对象最终会被重试到成功"，又不会在它持续失败时把 API Server 打爆。
+3. **失败重试 + 指数退避（exponential backoff）。** reconcile 返回 error 时，框架把这个 key **重新入队**，且退避时间逐次翻倍（1s → 2s → 4s → …）。既保证"出错的对象最终会被重试到成功"，又不会在它持续失败时把 API Server 拖垮。
 
 这就是为什么你的 `Reconcile` **只要"返回 error"就行**——剩下的重试、退避、去重，框架全替你兜住了。你只管把"当前该把状态调谐成什么样"这件事写对、写幂等。
 
-## 八、OwnerReference：级联删除与反向触发
+### OwnerReference：级联删除与反向触发
 
 controller 通常会为它管理的对象创建**子资源**。比如一个 `Foo` controller，会为每个 `Foo` 创建一个 Deployment。这里有两个需求：
 
@@ -229,7 +249,7 @@ controller 通常会为它管理的对象创建**子资源**。比如一个 `Foo
 
 第二点又一次呼应 level-triggered：子资源被人动了 → 触发属主重新 reconcile → 属主重新观察"我的子资源还在不在、对不对" → 不对就修。你**不需要**写"监听 Deployment 删除事件然后重建"这种脆弱的 edge-triggered 逻辑——你只需在 reconcile 里**幂等地 ensure 子资源存在**，而"什么时候该再 ensure 一次"由反向触发负责。
 
-## 九、Finalizer：删除前的临终清理
+### Finalizer：删除前的临终清理
 
 OwnerReference 的级联 GC 能帮你回收**集群内**的子资源。但如果你的 controller 在**集群外**也分配了东西呢？比如：
 
@@ -237,7 +257,7 @@ OwnerReference 的级联 GC 能帮你回收**集群内**的子资源。但如果
 - 在某个外部数据库里建了一条记录；
 - 在对象存储里建了一个 bucket。
 
-用户删掉你的对象时，Kubernetes 的 GC 管不到这些外部资源。如果对象"啪"地一下从 etcd 消失，你就**再也没机会**去释放它们了——它们会变成泄漏的孤儿。
+用户删掉你的对象时，Kubernetes 的 GC 管不到这些外部资源。如果对象一下子从 etcd 消失，你就**再也没机会**去释放它们了——它们会变成泄漏的孤儿。
 
 **Finalizer（终结器）** 就是为此而生的一道"临终清理"钩子：
 
@@ -260,11 +280,11 @@ OwnerReference 的级联 GC 能帮你回收**集群内**的子资源。但如果
 **这是 controller 里最容易出 bug 的地方，** 而原因还是那两条铁律：
 
 - **清理必须幂等。** reconcile 可能在"清理外部资源"和"移除 finalizer"之间崩溃重启，重启后又会重进清理逻辑。所以"释放外部资源"必须能安全地跑第二次。
-- **对 NotFound 宽容。** 如果要删的外部资源"本来就不存在了"（上次可能已经删过），不能当成错误。否则 reconcile 永远返回 error、finalizer 永远移不掉，对象**永远卡在 Terminating**，用户会抓狂。正确写法是："删，如果返回 NotFound，当作成功。"
+- **对 NotFound 宽容。** 如果要删的外部资源"本来就不存在了"（上次可能已经删过），不能当成错误。否则 reconcile 永远返回 error、finalizer 永远移不掉，对象**永远卡在 Terminating**，让用户非常头疼。正确写法是："删，如果返回 NotFound，当作成功。"
 
 一句话：**finalizer 的清理逻辑，要写得像 reconcile 主干一样——假设自己会被重复调用，假设资源可能已经不在了。**
 
-## 十、Status 与 Conditions：对外的单一事实源
+### Status 与 Conditions：对外的单一事实源
 
 最后是对象模型里 `spec` 和 `status` 的分工，它们正好对应控制循环的两端：
 
@@ -282,7 +302,33 @@ OwnerReference 的级联 GC 能帮你回收**集群内**的子资源。但如果
    用户 ◄─读── status   (actual,现在实际怎么样)
 ```
 
-落到开发上有三个要点：
+光说有点抽象，看一个真实对象长什么样（`kubectl get foo my-app -o yaml` 的节选）：
+
+```yaml
+apiVersion: example.com/v1
+kind: Foo
+metadata:
+  name: my-app
+  generation: 2            # 用户每改一次 spec,这个数 +1(这里改过 2 次)
+spec:                      # ── 用户写的"我想要什么" ──
+  replicas: 3
+  image: nginx:1.27
+status:                    # ── controller 写的"现在实际怎么样" ──
+  observedGeneration: 2    # controller 已处理到 generation=2,说明 status 是最新的
+  conditions:
+  - type: Ready            # 这个 Condition 表达"整体是否就绪"
+    status: "True"         #   True / False / Unknown
+    reason: AllReplicasReady
+    message: "3/3 replicas are available"
+    lastTransitionTime: "2026-06-22T03:14:00Z"
+  - type: Progressing
+    status: "False"
+    reason: ReconcileComplete
+    message: "Deployment has settled, no rollout in progress"
+    lastTransitionTime: "2026-06-22T03:14:00Z"
+```
+
+对着这个例子看下面三个要点，会清楚很多：
 
 **其一，status 是对外的单一事实源（single source of truth）。** 别人（用户、其他系统、`kubectl get`）想知道"这对象现在怎么样了"，只看 status。常用 **Conditions（条件）** 这种结构化方式表达——每个 Condition 有 `type`（如 `Ready`)、`status`(`True`/`False`/`Unknown`)、`reason`、`message`，组合起来表达健康状况和进度。
 
@@ -296,9 +342,9 @@ OwnerReference 的级联 GC 能帮你回收**集群内**的子资源。但如果
 
 ---
 
-## 十一、顶层思想：开始写代码之前，先在脑子里装一句话
+## 五、三条纪律：开始写代码前先在脑子里装一句话
 
-到这里所有构件都讲完了。但在敲第一行代码前，我推荐你先把一个**思维模型**装进脑子，因为它能帮你绕开新手 90% 的坑。这个模型只有一句话：
+到这里七个要点都讲完了。但在敲第一行代码前，我推荐你先把一个**思维模型**装进脑子，因为它能帮你绕开新手 90% 的坑。这个模型只有一句话：
 
 > **不要问"发生了什么，我该做什么反应"；要问"现在是什么样，期望是什么样，我怎么把前者变成后者"。**
 
@@ -308,15 +354,21 @@ OwnerReference 的级联 GC 能帮你回收**集群内**的子资源。但如果
 2. **每个写操作都是"ensure"，不是"do once"。** 创建、更新、删除，都要能安全地重复执行——因为它**一定会**被重复执行。
 3. **把每一种中途崩溃都想一遍。** "如果我在这一行之后、下一行之前挂掉，重启后重新进 reconcile，会出乱子吗？" 如果会，说明这段还不够幂等。
 
-带着这三条，我们看一份把前面所有概念串起来的**骨架代码**（用 `controller-runtime`，重在理解，不保证可直接编译）。
+带着这三条纪律，我们来看代码。
 
-### 11.1 类型定义：声明 spec 与 status
+---
+
+## 六、骨架代码：把七个要点串起来
+
+下面这份骨架把前面的要点全部串在一起（用 `controller-runtime`，重在理解，不保证可直接编译）。
+
+### 类型定义：声明 spec 与 status
 
 先用 Go 结构体定义资源（`kubebuilder` 会据此自动生成 CRD 的 YAML):
 
 ```go
 // +kubebuilder:object:root=true
-// +kubebuilder:subresource:status    // 启用 /status 子资源(第十节)
+// +kubebuilder:subresource:status    // 启用 /status 子资源(见 Status/Conditions 一节)
 type Foo struct {
     metav1.TypeMeta   `json:",inline"`
     metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -336,11 +388,11 @@ type FooStatus struct {
 }
 ```
 
-### 11.2 main：用 Builder 声明式地搭出控制循环
+### main：用 Builder 声明式地搭出控制循环
 
 ```go
 func main() {
-    // Manager 持有共享的 Cache(第六节的 Informer/缓存)、
+    // Manager 持有共享的 Cache(前文 Informer/缓存)、
     // Client(带缓存的读 + 直写 API Server 的写)、WorkQueue 等基础设施。
     mgr, _ := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
         // 生产必开 LeaderElection:多副本部署时只有 leader 跑 reconcile,
@@ -353,14 +405,14 @@ func main() {
     _ = ctrl.NewControllerManagedBy(mgr).
         For(&v1.Foo{}).             // 主资源:Foo 变了 → Foo 的 key 入队(level-triggered 的"提醒")
         Owns(&appsv1.Deployment{}). // 子资源:带 Foo 这条 OwnerReference 的 Deployment 变了
-                                    //        → 反向触发属主 Foo 重新 reconcile(第八节)
+                                    //        → 反向触发属主 Foo 重新 reconcile(见 OwnerReference 一节)
         Complete(&FooReconciler{Client: mgr.GetClient()})
 
     _ = mgr.Start(ctrl.SetupSignalHandler())
 }
 ```
 
-### 11.3 Reconcile 主干：四步骨架
+### Reconcile 主干：四步骨架
 
 ```go
 func (r *FooReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -372,14 +424,14 @@ func (r *FooReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
         return ctrl.Result{}, client.IgnoreNotFound(err)
     }
 
-    // ❷ 处理删除 / finalizer(第九节)。
+    // ❷ 处理删除 / finalizer(见 Finalizer 一节)。
     const finalizer = "foo.example.com/cleanup"
     if !foo.DeletionTimestamp.IsZero() {
         // 对象正在被删除。
         if controllerutil.ContainsFinalizer(&foo, finalizer) {
             // 外部资源临终清理。必须幂等、对 NotFound 宽容(崩溃重启会重进这里)。
             if err := r.cleanupExternalResources(ctx, &foo); err != nil {
-                return ctrl.Result{}, err // 失败 → 入队重试(指数退避,第七节)
+                return ctrl.Result{}, err // 失败 → 入队重试(指数退避,见 WorkQueue 一节)
             }
             controllerutil.RemoveFinalizer(&foo, finalizer)
             if err := r.Update(ctx, &foo); err != nil {
@@ -395,12 +447,12 @@ func (r *FooReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
         return ctrl.Result{}, r.Update(ctx, &foo)
     }
 
-    // ❸ 确保子资源存在(第五节:ensure 而非 create,整段必须幂等)。
+    // ❸ 确保子资源存在(呼应幂等一节:ensure 而非 create,整段必须幂等)。
     if err := r.ensureDeployment(ctx, &foo); err != nil {
         return ctrl.Result{}, err
     }
 
-    // ❹ 回填 status(第十节)。走 /status 子资源,与用户写的 spec 互不覆盖。
+    // ❹ 回填 status(见 Status/Conditions 一节)。走 /status 子资源,与用户写的 spec 互不覆盖。
     foo.Status.ObservedGeneration = foo.Generation
     meta.SetStatusCondition(&foo.Status.Conditions, metav1.Condition{
         Type:               "Ready",
@@ -412,12 +464,12 @@ func (r *FooReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
         return ctrl.Result{}, err
     }
 
-    // 返回 nil:本轮收敛完成。若返回 error,框架按指数退避把 key 重新入队(第七节)。
+    // 返回 nil:本轮收敛完成。若返回 error,框架按指数退避把 key 重新入队(见 WorkQueue 一节)。
     return ctrl.Result{}, nil
 }
 ```
 
-### 11.4 ensureDeployment：幂等收敛的核心动作
+### ensureDeployment：幂等收敛的核心动作
 
 ```go
 func (r *FooReconciler) ensureDeployment(ctx context.Context, foo *v1.Foo) error {
@@ -425,7 +477,7 @@ func (r *FooReconciler) ensureDeployment(ctx context.Context, foo *v1.Foo) error
         ObjectMeta: metav1.ObjectMeta{Name: foo.Name, Namespace: foo.Namespace},
     }
 
-    // CreateOrUpdate 是幂等的关键工具(呼应第五节):
+    // CreateOrUpdate 是幂等的关键工具(呼应幂等一节):
     //   不存在     → 按 mutate 填充后创建
     //   已存在     → 读出来、跑 mutate、有 diff 才更新
     //   已存在无 diff → 什么都不做
@@ -437,7 +489,7 @@ func (r *FooReconciler) ensureDeployment(ctx context.Context, foo *v1.Foo) error
         dep.Spec.Template = buildPodTemplate(foo)
         dep.Spec.Template.Labels = labels
 
-        // 设置 OwnerReference(第八节):级联 GC + 反向触发,二合一。
+        // 设置 OwnerReference(见 OwnerReference 一节):级联 GC + 反向触发,二合一。
         return controllerutil.SetControllerReference(foo, dep, r.Scheme)
     })
     return err
@@ -458,19 +510,6 @@ func (r *FooReconciler) ensureDeployment(ctx context.Context, foo *v1.Foo) error
 
 所以真正要记住的，其实只有一句话：**不要响应事件，要调谐状态。** 把它装进脑子，你再看任何 controller 源码，都能立刻问出那个对的问题——**它在把什么 actual 调谐到什么 desired？它的幂等是怎么保证的？**
 
-### 核心概念速查
-
-| 概念 | 一句话本质 |
-| --- | --- |
-| **Level-triggered** | 只看"当前状态"、不看"发生了什么事件"；漏事件无害，下轮自愈 |
-| **Edge-triggered** | 响应事件本身；一旦漏事件就可能永久错下去——controller 不用它 |
-| **Reconcile** | 拿对象 key 把当前状态调谐到期望状态；只收 key、不收事件 |
-| **Idempotency（幂等）** | 同一逻辑跑 1 次和 100 次结果一致；写"ensure"而非"create" |
-| **Informer & Cache** | List+Watch 同步到本地缓存，读缓存不打 API Server；代价是可能短暂陈旧 |
-| **WorkQueue** | 去重、限速、失败重试 + 指数退避；天然把惊群压平 |
-| **OwnerReference** | 级联 GC + 子资源变化反向触发属主 reconcile(`Owns`) |
-| **Finalizer** | 删除前临终清理外部资源；清理必须幂等、对 NotFound 宽容 |
-| **Status & Conditions** | controller 对外的单一事实源；与 spec 走不同子资源更新 |
 
 ### 推荐学习路径
 
