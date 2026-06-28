@@ -24,12 +24,34 @@
   <div style="padding:26px 22px 0;">
     <div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:6px 0 8px;border-radius:0 6px 6px 0;">
       <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">读前导览</p>
-      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">服务 LLM 的真正瓶颈不是算力，而是显存。本文从 prefill / decode / KV cache 讲起，拆解 vLLM 靠 PagedAttention 与连续批处理把"一张 GPU 服务多少用户"做到极致的工程原理，并横向对比 SGLang、TensorRT-LLM。</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">本文从一个真实部署场景出发，沿 prefill、decode、KV cache 一路讲到 vLLM 的两大基石——PagedAttention 与连续批处理，最后横向对比 SGLang、TensorRT-LLM。不需要深厚背景，跟着读就行。</p>
     </div>
-    <p style="font-size:12px;color:#94a3b8;font-family:'PingFang SC','Microsoft YaHei',sans-serif;margin:4px 0 0;line-height:1.7;">本文翻译整理自 Amit Shekhar《How does vLLM work?》</p>
   </div>
 
   <div style="padding:0 22px;">
+
+  <!-- ===== 引子 00 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">00</span>
+      </td>
+      <td valign="top" style="border:none;">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">引子</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">先想象一个场景。你花重金租了一张 80GB 的 A100，把一个开源大模型部署上去。自己测试时体验丝滑——问一句、秒回一句。于是你信心满满地把它开放给整个团队。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">几十个人同时涌进来，结果却出乎意料：有人转着圈等了半天才出字，更糟的是没过多久服务直接报错——<strong>显存不足</strong>。你赶紧打开监控，却看到一件怪事：这张卡明明还显示着不少空闲显存，为什么就服务不了几个人？</p>
+
+  <div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+    <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">先停下来想一想</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">显卡账面上还有余量，实际却只能服务寥寥几个用户——瓶颈到底卡在哪？答案不在"算力够不够快"，而藏在一个容易被忽略的地方：显存是怎么被用掉、又是怎么被白白浪费掉的。</p>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这篇文章，就从这桩"怪事"讲起，一步步拆开 vLLM 是怎么把同一张 GPU 压榨到能服务远多于平常的用户的。我们先从最基础的概念入手。</p>
 
   <!-- ===== 章节 01 ===== -->
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
@@ -43,7 +65,7 @@
     </tr>
   </table>
 
-  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">大语言模型是 ChatGPT、Claude 这类产品背后的核心技术：给它一段文本，它返回另一段文本。<strong>所谓服务一个 LLM，就是把模型部署在机器上，让大量用户同时向它提问、并拿到回答。</strong>负责把请求收进来、调度模型运行、再把回复发回去的那段软件，就叫<strong>服务引擎（serving engine）</strong>。</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">要看懂开头那桩怪事，得先弄清这套系统到底在干什么。大语言模型给它一段文本、它就返回另一段文本；<strong>所谓服务一个 LLM，就是把模型部署在机器上，让大量用户同时向它提问、并拿到回答。</strong>而负责把请求收进来、调度模型运行、再把回复发回去的那段软件，就叫<strong>服务引擎（serving engine）</strong>。</p>
 
   <!-- 服务引擎流程 H -->
   <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;">
@@ -201,7 +223,7 @@
     <p style="font-size:12px;color:#be123c;margin:0;font-family:'PingFang SC','Microsoft YaHei',sans-serif;line-height:1.6;">剩余空闲都是零碎小块 → 装不下任何新请求</p>
   </div>
 
-  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">于是出现尴尬局面：显卡账面上明明还剩不少显存，实际却只能服务寥寥几个用户。这正是 vLLM 要解决的问题。</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">现在，开头那桩怪事终于有了答案：那张卡账面上还剩不少显存，却服务不了几个人，谜底就是这两种碎片——空间不是不够，而是被锁死、被切碎了。这，正是 vLLM 要破解的局。</p>
 
   <!-- ===== 章节 04 ===== -->
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
@@ -489,7 +511,7 @@
   <!-- Footer -->
   <div style="margin-top:36px;padding-top:18px;border-top:1px solid #e2e8f0;">
     <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0 0 6px;line-height:1.8;">vLLM · PagedAttention · KV cache · 连续批处理 · LLM 推理优化</p>
-    <p style="font-size:11px;color:#cbd5e1;letter-spacing:0.03em;margin:0;line-height:1.8;">参考：vLLM 原始论文（SOSP '23）· docs.vllm.ai · 译自 Amit Shekhar《How does vLLM work?》</p>
+    <p style="font-size:11px;color:#cbd5e1;letter-spacing:0.03em;margin:0;line-height:1.8;">参考：vLLM 原始论文（SOSP '23）· docs.vllm.ai</p>
   </div>
 
   </div><!-- /padding -->
