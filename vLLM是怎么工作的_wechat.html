@@ -1,0 +1,441 @@
+<meta charset="utf-8">
+<!--
+  WeChat formatted article: vLLM 是怎么工作的
+  主题色（暗紫主题）:
+    navy:         #0f172a
+    indigo:       #6366f1
+    indigo_light: #eef2ff
+    purple:       #8b5cf6
+    rose:         #f43f5e
+    teal:         #14a085
+-->
+<div style="max-width:100%;margin:0 auto;background:#ffffff;">
+
+  <!-- ===== Hero ===== -->
+  <div style="background:#0f172a;padding:52px 28px 44px;text-align:center;">
+    <div style="display:inline-block;font-size:11px;letter-spacing:0.12em;color:#818cf8;background:#1e2746;border:1px solid #3a4684;padding:5px 16px;border-radius:20px;margin-bottom:22px;">AI INFRA · LLM 推理</div>
+    <div style="height:10px;"></div>
+    <p style="font-family:'STSong','SimSun',serif;font-size:26px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">vLLM 是怎么<span style="color:#818cf8;">工作的</span></p>
+    <p style="font-size:13px;color:#8a93ab;letter-spacing:0.06em;margin:0;line-height:1.7;">从 KV cache 到 PagedAttention，<br>一张 GPU 上的显存博弈</p>
+    <div style="width:36px;height:2px;background:#6366f1;margin:22px auto 0;"></div>
+  </div>
+
+  <!-- ===== 导语 Callout ===== -->
+  <div style="padding:26px 22px 0;">
+    <div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:6px 0 8px;border-radius:0 6px 6px 0;">
+      <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">读前导览</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">服务 LLM 的真正瓶颈不是算力，而是显存。本文从 prefill / decode / KV cache 讲起，拆解 vLLM 靠 PagedAttention 与连续批处理把"一张 GPU 服务多少用户"做到极致的工程原理，并横向对比 SGLang、TensorRT-LLM。</p>
+    </div>
+    <p style="font-size:12px;color:#94a3b8;font-family:'PingFang SC','Microsoft YaHei',sans-serif;margin:4px 0 0;line-height:1.7;">本文翻译整理自 Amit Shekhar《How does vLLM work?》</p>
+  </div>
+
+  <div style="padding:0 22px;">
+
+  <!-- ===== 章节 01 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">01</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">什么是"服务一个 LLM"</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">大语言模型是 ChatGPT、Claude 这类产品背后的核心技术：给它一段文本，它返回另一段文本。<strong>所谓服务一个 LLM，就是把模型部署在机器上，让大量用户同时向它提问、并拿到回答。</strong>负责把请求收进来、调度模型运行、再把回复发回去的那段软件，就叫<strong>服务引擎（serving engine）</strong>。</p>
+
+  <!-- 服务引擎流程 H -->
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;">
+    <div style="background:#eef2ff;border:1px solid #c7cef5;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+      <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 2px;">用户 1 … 用户 N</p>
+      <p style="font-size:12px;color:#64748b;margin:0;">并发发来一堆问题</p>
+    </div>
+    <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+    <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+      <p style="font-size:13px;font-weight:700;color:#7c3aed;margin:0 0 2px;">服务引擎</p>
+      <p style="font-size:12px;color:#64748b;margin:0;">接请求、做调度、发回复</p>
+    </div>
+    <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+    <div style="background:#0f172a;border-radius:6px;padding:10px 14px;text-align:center;">
+      <p style="font-size:13px;font-weight:700;color:#ffffff;margin:0;">GPU 上的模型 · 干重活生成回复</p>
+    </div>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">LLM 跑在 <strong>GPU</strong> 上。GPU 算力强劲，但显存既有限又昂贵。<strong>显存每浪费一分，能服务的用户就少一分，成本也随之高一分。</strong></p>
+
+  <div style="background:#eef2ff;border:1px solid #d6dbf8;border-radius:8px;padding:18px 22px;margin:24px 0;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">服务 LLM 的本质目标：在一张 GPU 上，尽可能多、也尽可能快地服务用户。vLLM 正是为赢下这场博弈而生。</p>
+  </div>
+
+  <!-- ===== 章节 02 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">02</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">Prefill、Decode 与 KV cache</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">LLM 收到文字后，先把它切成更小的片段——叫做 <strong>token（词元）</strong>。token 可以是一个词、半个词或一个标点；为方便理解，下面近似把一个 token 当成一个词。</p>
+
+  <div style="background:#0f172a;border-radius:8px;padding:24px 22px;margin:24px 0;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:30px;color:#6366f1;line-height:1;margin:0 0 6px;opacity:0.7;">&ldquo;</p>
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">关键直觉：模型每"跑"一次，只能往外吐出 1 个新 token。要写出一整句话，就得让模型反复跑很多次，一次接一次地把词续上去。</p>
+  </div>
+
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#6366f1;margin:24px 0 10px;">▸ 第一阶段：Prefill（把 prompt 读进去）</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">假设 prompt 是 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #d6dbf8;">Tell me a joke</span>，切成 4 个 token。模型把这 4 个 token <strong>一次性、同时</strong>喂进去处理一遍，吐出回复的第 1 个 token。这一步只做一次。</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin:18px 0;">
+    <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 10px;">// PREFILL：4 个 token 一起喂进去</p>
+    <p style="margin:0 0 8px;line-height:2.4;">
+      <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid #c7cef5;">Tell</span>
+      <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid #c7cef5;">me</span>
+      <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid #c7cef5;">a</span>
+      <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid #c7cef5;">joke</span>
+    </p>
+    <p style="text-align:center;color:#94a3b8;font-size:13px;margin:4px 0;">↓ 模型跑一次，只产出 1 个新 token</p>
+    <p style="margin:0;">
+      <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#0f172a;color:#ffffff;">Why</span>
+    </p>
+  </div>
+
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#6366f1;margin:24px 0 10px;">▸ 第二阶段：Decode（一个词一个词往下写）</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">接下来进入循环。<strong>每一步，模型都把"到目前为止的全部 token"重新看一遍，再吐出 1 个新 token 接到末尾。</strong>然后拿更长的序列再跑下一步，如此往复。</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12.5px;color:#334155;line-height:1.9;">
+    <span style="color:#94a3b8;">DECODE 第 1 步</span><br>
+    看：Tell me a joke Why → 吐出 <strong style="color:#6366f1;">did</strong><br>
+    <span style="color:#94a3b8;">DECODE 第 2 步</span><br>
+    看：Tell me a joke Why did → 吐出 <strong style="color:#6366f1;">the</strong><br>
+    <span style="color:#94a3b8;">DECODE 第 3 步</span><br>
+    看：Tell me a joke Why did the → 吐出 <strong style="color:#6366f1;">chicken</strong><br>
+    <span style="color:#94a3b8;">…… 每步长 1 个 token，直到吐出"结束符"或到达上限</span>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;">注意关键一点：decode 的每一步都要回头参考前面所有 token。这正是为什么 prefill 计算密集（一口气算完一长串），而 decode 是逐 token 慢慢挤出来的。</p>
+
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#6366f1;margin:24px 0 10px;">▸ 为什么需要 KV cache</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">decode 每一步都要"重新看一遍前面所有 token"。如果每次都把老 token 的内部计算从头再算一遍，会非常浪费，而且越往后越慢。于是有了关键优化：模型把每个 token 算过一次的中间结果（每一层、每个注意力头上的 <strong>Key / Value 张量</strong>）<strong>缓存起来</strong>，这份缓存就叫 <strong>KV cache</strong>。有了它，decode 每一步只需<strong>真正计算那 1 个新 token</strong>，前面的老 token 直接从缓存里读。</p>
+
+  <!-- 折叠科普 Callout -->
+  <div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+    <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">背景补充 · 注意力机制（熟悉 Transformer 可跳过）</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;">模型处理一个 token 时要判断前面哪些 token 跟它有关，很像一次"软查询"：每个 token 产出三个向量——<strong>Query</strong>（我在找什么）、<strong>Key</strong>（我是关于什么的，相当于索引）、<strong>Value</strong>（我实际携带的信息）。当前 token 用自己的 Query 比对前面所有 token 的 Key，算出"该关注谁、关注多少"，再按权重汇总对应的 Value。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;">模型并行做很多份这种查询，每份叫一个<strong>注意力头</strong>：有的管语法搭配，有的弄清代词指代。模型有很多层，每层又有很多头，所以"每一层、每个头上"才都有一份 K/V。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;">例：<span style="font-family:'Courier New',monospace;font-size:12px;">The cat sat on the mat because it was tired.</span> 处理到 <span style="font-family:'Courier New',monospace;font-size:12px;">it</span> 时，它的 Query 与 <span style="font-family:'Courier New',monospace;font-size:12px;">cat</span> 的 Key 最匹配，注意力权重集中到 <span style="font-family:'Courier New',monospace;font-size:12px;">cat</span>，模型就此"读懂"了 it 指的是猫而非垫子。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;"><strong>为什么缓存 K/V 而非 Q：</strong>生成新 token 时是拿新 token 的 Query 去对照前面老 token 的 Key/Value。老 token 的 K/V 算过一次便不再改变，存下来即可；新 token 只需现算自己的 Q，再把 K/V 追加进缓存。</p>
+  </div>
+
+  <div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+    <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">关键点</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">KV cache 会随回答变长而不断增长，且全部驻留在 GPU 显存里。以一个 7B 模型在 fp16 下为例，单个 token 的 KV cache 约<strong>几百 KB</strong>（具体取决于是否用 GQA：MHA 模型每 token 可达约 0.5MB，重度 GQA 会小很多）；上千 token 的长对话就要占掉<strong>数百 MB</strong> 乃至 GB 级——而一张卡的显存总共也就 24 / 40 / 80 GB。这份会不断膨胀的缓存，正是 vLLM 要解决的核心瓶颈。</p>
+  </div>
+
+  <!-- 分割线 -->
+  <div style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  </div>
+
+  <!-- ===== 章节 03 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">03</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">问题：KV cache 吞噬显存，朴素方式还在浪费</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">模型本身就占掉一大块显存，剩下的空间才用来放所有正在服务请求的 KV cache。<strong>所以决定"一次能并发服务多少用户"的往往不是算力，而是留给 KV cache 的那点显存。</strong>服务 LLM 的真正瓶颈，从来不是算得快不快，而是<strong>显存管理</strong>。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">朴素的服务引擎会做一件"看似稳妥、实则很浪费"的事：请求一进来，引擎并不知道回答会有多长，于是干脆按最坏情况（比如 2000 token）预留一整块连续显存。可绝大多数回答只有几十到一两百 token，剩下 1900 多 token 的空间就被白白锁住。</p>
+
+  <!-- 优缺点纵向 → 这里用两种碎片 -->
+  <div style="background:#fff1f2;border:1px solid #fbcfe1;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+    <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">✗ 内部碎片 internal fragmentation</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">单个请求预留 2000、实际只用 50，剩下 1950 浪费在这个请求自己的内存块内部。</p>
+  </div>
+  <div style="background:#fff1f2;border:1px solid #fbcfe1;border-radius:6px;padding:12px 16px;margin-bottom:18px;">
+    <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">✗ 外部碎片 external fragmentation</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">多个请求各占一块，块与块之间散落零碎小空隙，单看任何一处都塞不下一个新请求。</p>
+  </div>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12px;color:#334155;line-height:1.9;">
+    <span style="color:#94a3b8;">朴素服务：每个请求一块大连续内存</span><br>
+    请求 A：[<span style="color:#16a34a;">用 50</span> ····· 为 2000 预留但浪费 ·····]<br>
+    请求 B：[<span style="color:#16a34a;">用 120</span> ···· 为 2000 预留但浪费 ·····]<br>
+    请求 C：[<span style="color:#16a34a;">用 20</span> ····· 为 2000 预留但浪费 ·····]<br>
+    <span style="color:#be123c;">剩余空闲：零碎小块 → 装不下任何新请求</span>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">于是出现尴尬局面：显卡账面上明明还剩不少显存，实际却只能服务寥寥几个用户。这正是 vLLM 要解决的问题。</p>
+
+  <!-- ===== 章节 04 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">04</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">PagedAttention：把操作系统的分页搬到 KV cache</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;"><strong>vLLM 是一个面向 LLM 推理的高吞吐服务引擎</strong>，核心是把 KV cache 的显存管理做到极致，主要靠两件事：<strong>PagedAttention</strong>（把 KV cache 拆成固定大小小块，用多少分多少）与<strong>连续批处理</strong>（每个 decode 步让请求动态进出，尽量不让 GPU 闲着）。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">PagedAttention 借鉴操作系统的<strong>分页</strong>机制：不一次性连续分配，而是切成固定大小的页，按需分配、不要求物理相邻，再用页表记录每页落在哪里。vLLM 对 KV cache 做同样的事：</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">切块</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">把 KV cache 切成固定大小的 block，默认每块 16 个 token（可配置）。</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">块表 block table</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">每个请求维护一张块表，记录它逻辑上的第 0、1、2… 块分别落在物理上的哪一块。</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">按需取、随时还</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">需要更多 token 就从空闲池取一块，不要求物理相邻；请求一结束，占用的块立刻归还空闲池。</p>
+  </div>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12px;color:#334155;line-height:1.9;">
+    <span style="color:#94a3b8;">物理块池</span> [B1][B2][B3][B4][B5][B6][B7][B8][B9]…<br>
+    请求 A 块表 → B1, B4, B7　<span style="color:#94a3b8;">（按需 3 块）</span><br>
+    请求 B 块表 → B2, B3　　<span style="color:#94a3b8;">（按需 2 块）</span><br>
+    请求 C 块表 → B5　　　　<span style="color:#94a3b8;">（刚开始 1 块）</span><br>
+    <span style="color:#16a34a;">空闲块：B6, B8, B9</span>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这里要分清两个概念：<strong>逻辑块</strong>是请求自己视角的"第 0、1、2 块"，编号连续；<strong>物理块</strong>是显存里实际占用的那一块，物理位置可散落在任何地方。</p>
+
+  <div style="background:#fff3ed;border-left:4px solid #e85d04;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+    <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#e85d04;margin:0 0 8px;">工程细节 · 这套机制是有代价的</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;">注意力计算所需的 K/V 张量在显存里不再连续，普通的 attention CUDA kernel 没法直接用。现成的高性能 kernel（如 FlashAttention）正是建立在"一个序列的 K/V 在显存里连成一片"这个前提上写的——GPU 靠成千上万线程挨着读、按规整步长读才能榨干带宽。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">PagedAttention 把 K/V 打散成物理四处散落的 block，等于抽走了原 kernel 提速的前提。于是 vLLM 必须<strong>重写一个 kernel</strong>：先查块表弄清每个逻辑位置对应哪个物理块，再去零散地址上取 K/V 做注意力，既兼容分页布局，又尽量不丢并行效率。这才是 PagedAttention 落地的真正难点——它远不止"加一个内存分配器"那么简单。</p>
+  </div>
+
+  <!-- ===== 章节 05 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">05</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">顺手的红利：PagedAttention 如何共享内存</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">一旦 KV cache 按块组织，<strong>内存共享</strong>几乎顺手就能拿到：两个不同请求，只要把各自块表里的某一项指向同一个物理块，就实现了共享。</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #14a085;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">相同前缀</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">很多请求都以同一段长 system prompt 开头（如"你是某汽车经销商的客服助手……"）。vLLM 把这段开头的 KV cache 只算一次、只存一份，所有请求的块表都指向那几块。</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #14a085;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:18px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">Beam search 束搜索</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">模型同时探索多条候选回答，它们共享同一个开头、只在后面才分叉。开头的块共享，分叉之后再各自分配。</p>
+  </div>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12px;color:#334155;line-height:1.9;text-align:center;">
+    <span style="color:#94a3b8;">共享开头（物理上只有一份）</span><br>
+    [B1][B2]<br>
+    ┌──────┼──────┐<br>
+    请求A　请求B　Beam C<br>
+    +[B5]　+[B6]　+[B7]
+  </div>
+
+  <!-- ===== 章节 06 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">06</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">连续批处理：让 GPU 一刻不空转</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">GPU 一次同时跑多个请求时效率最高，所以要做<strong>批处理</strong>。但最朴素的<strong>静态批处理</strong>是凑齐一批一起跑，<strong>必须等整批里最慢的那个结束，才能开始下一批</strong>。问题在于不同请求长度差别巨大：一个 20 token 就答完，另一个要 800 token。20 token 那个早早跑完，占的 slot 却得空等到 800 token 结束——这段空等纯属浪费。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;"><strong>连续批处理</strong>换了思路：在每一个 decode 步都重新决定这一批跑哪些请求——某个请求一结束，就立刻从等待队列拉一个新请求补进它的位置。</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12px;color:#334155;line-height:1.9;">
+    <span style="color:#94a3b8;">静态批处理：整批等最慢的</span><br>
+    step　 1 2 3 4 5 6 7 8<br>
+    请求A　X X X <span style="color:#be123c;">完 - - - -</span>　<span style="color:#be123c;">← slot 空转</span><br>
+    请求B　X X X X X X X 完<br>
+    <br>
+    <span style="color:#94a3b8;">连续批处理：finished 立即被填掉</span><br>
+    slot1　<span style="color:#6366f1;">A A A</span> <span style="color:#16a34a;">C C C</span> <span style="color:#7c3aed;">D D</span>　<span style="color:#94a3b8;">← A 完 C 进，C 完 D 进</span><br>
+    slot2　B B B B B B B 完
+  </div>
+
+  <div style="background:#eef2ff;border:1px solid #d6dbf8;border-radius:8px;padding:18px 22px;margin:24px 0;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">连续批处理与 PagedAttention 是天作之合：前者一空出 slot，后者就立刻把对应 block 回收进空闲池，新请求随即拿到显存与算力，无缝接上。</p>
+  </div>
+
+  <!-- ===== 章节 07 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">07</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">OpenAI 兼容 API 与 vLLM 的收益</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">vLLM 不只是推理库，对外暴露的是一个 <strong>OpenAI 兼容的 HTTP 服务器</strong>——<span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #d6dbf8;">/v1/chat/completions</span> 等接口一应俱全，支持流式输出、function calling。意义在于：用 OpenAI SDK 写好的现有代码，只要把 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;border:1px solid #d6dbf8;">base_url</span> 指向自己的 vLLM 地址，就能无缝切换到自家 GPU 上的开源模型，<strong>业务代码一行都不用动</strong>。</p>
+
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+    <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">✓ 更高吞吐</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">PagedAttention 省显存、连续批处理省算力，二者叠加，很多场景下相比朴素引擎能拿到 2–4 倍甚至更高的吞吐提升（数字来自 SOSP '23 原始论文，实际幅度取决于工作负载）。</p>
+  </div>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+    <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">✓ 更高 GPU 利用率 / 更低单请求成本</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">显存和算力都能接近打满；一张卡服务更多用户，分摊到每个请求的硬件成本随之下降。</p>
+  </div>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+    <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">✓ 极低接入成本</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">一套 OpenAI 兼容 API，现有代码几乎拿来即用。</p>
+  </div>
+  <div style="background:#fff1f2;border:1px solid #fbcfe1;border-radius:6px;padding:12px 16px;margin-bottom:18px;">
+    <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">✗ 代价 · trade-off</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">连续批处理叠加大 batch，通常意味着单请求延迟（尤其 TTFT 和 TBT）上升——你的请求得和别人的一起排队调度。生产部署要在吞吐与延迟之间权衡，天下没有免费午餐。</p>
+  </div>
+
+  <!-- ===== 章节 08 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">08</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">横向对比：SGLang、TensorRT-LLM、LMDeploy</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">vLLM 并不是唯一选择。截至 2026 年，生产环境里常见的同类方案还有以下几个。</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:10px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 6px;">TensorRT-LLM <span style="font-size:11px;color:#94a3b8;font-weight:400;">NVIDIA</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0 0 5px;line-height:1.7;"><strong style="color:#16a34a;">优势</strong>：官方出品，kernel 优化做到 PTX/SASS 层级，H100/H200/B200 上裸吞吐往往是天花板；in-flight batching、paged KV cache、speculative decoding、FP8/INT4/INT8 量化全支持。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0 0 5px;line-height:1.7;"><strong style="color:#be123c;">劣势</strong>：需 AOT 编译，耗时长、新模型适配慢、调试门槛高，且只支持 NVIDIA 硬件。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.7;"><strong style="color:#6366f1;">适用</strong>：模型稳定不常换、硬件锁定 NVIDIA、对延迟极敏感的场景。</p>
+  </div>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #14a085;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:10px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 6px;">SGLang <span style="font-size:11px;color:#94a3b8;font-weight:400;">Berkeley 等</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0 0 5px;line-height:1.7;"><strong style="color:#16a34a;">优势</strong>：核心创新 RadixAttention——用基数树做 KV cache 前缀共享，比 vLLM 更激进；agent、多轮对话、RAG 等前缀大量重复的场景命中率和性能明显更优；内置面向 LLM 程序的 DSL。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0 0 5px;line-height:1.7;"><strong style="color:#be123c;">劣势</strong>：社区比 vLLM 小，硬件后端覆盖窄，冷门模型适配慢。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.7;"><strong style="color:#6366f1;">适用</strong>：以 agent / RAG / 多轮对话为主、前缀复用率高的工作流。</p>
+  </div>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:10px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 6px;">LMDeploy <span style="font-size:11px;color:#94a3b8;font-weight:400;">上海 AI Lab</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0 0 5px;line-height:1.7;"><strong style="color:#16a34a;">优势</strong>：TurboMind 后端在某些中文场景和特定硬件（含国产卡）上很有竞争力，量化支持完善。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.7;"><strong style="color:#6366f1;">适用</strong>：国内部署、需考虑国产硬件，或重度依赖 InternLM 等模型的场景。</p>
+  </div>
+
+  <div style="background:#0f172a;border-radius:0 6px 6px 0;border-left:4px solid #818cf8;padding:14px 16px;margin-bottom:18px;">
+    <p style="font-size:14px;font-weight:700;color:#ffffff;margin:0 0 6px;">vLLM</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#cbd5e1;margin:0 0 5px;line-height:1.7;"><strong style="color:#86efac;">优势</strong>：社区最活跃、文档最全、模型覆盖最广；支持 NVIDIA、AMD、Intel Gaudi、Google TPU、AWS Neuron 等；扩展性好，接新模型、新量化、新 attention 后端都容易。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#cbd5e1;margin:0 0 5px;line-height:1.7;"><strong style="color:#fda4af;">劣势</strong>：NVIDIA 上极限吞吐通常略逊 TensorRT-LLM，前缀共享略逊 SGLang。</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#cbd5e1;margin:0;line-height:1.7;"><strong style="color:#a5b4fc;">适用</strong>：默认首选。除非有压倒一切的特定需求，否则从 vLLM 起步几乎不会出错。</p>
+  </div>
+
+  <div style="background:#eef2ff;border:1px solid #d6dbf8;border-radius:8px;padding:18px 22px;margin:24px 0;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:center;">一句话：TRT-LLM 拼极限、SGLang 拼前缀、vLLM 拼通用。</p>
+  </div>
+
+  <!-- ===== 章节 09 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+    <tr>
+      <td width="46" valign="top" style="padding-top:2px;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">09</span>
+      </td>
+      <td valign="top">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">真实世界中的应用</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">vLLM 是当下最流行的开源 LLM 服务引擎之一，对任何想在自家 GPU 上跑开源模型的团队几乎都是默认选项。两类场景尤其受益：</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">高流量聊天应用</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">连续批处理把每个 GPU slot 填满，PagedAttention 把所有用户的 KV cache 紧凑塞进显存，两头都不浪费。</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:18px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">Agent 系统</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">agent 每步都带同一段长指令（system prompt + 工具说明 + 历史对话），前缀共享省显存效果突出；而 agent 往往步骤多、单步回答短，连续批处理能把 GPU 空闲时间压到极低。</p>
+  </div>
+
+  <!-- 分割线 -->
+  <div style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  </div>
+
+  <!-- ===== 写在最后 ===== -->
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.1em;color:#6366f1;margin:30px 0 14px;">写 在 最 后</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <table cellpadding="0" cellspacing="0"><tr valign="top">
+      <td width="32" style="padding-top:1px;">
+        <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div>
+      </td>
+      <td style="padding-left:10px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>PagedAttention</strong>：把操作系统的分页思想搬到 KV cache，用固定小块按需分配显存，既消灭碎片浪费，又让相同前缀近乎免费地共享。</p>
+      </td>
+    </tr></table>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <table cellpadding="0" cellspacing="0"><tr valign="top">
+      <td width="32" style="padding-top:1px;">
+        <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div>
+      </td>
+      <td style="padding-left:10px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>连续批处理</strong>：每个 decode 步动态放入新请求、放走已完成请求，让 GPU 永不空转。</p>
+      </td>
+    </tr></table>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+    <table cellpadding="0" cellspacing="0"><tr valign="top">
+      <td width="32" style="padding-top:1px;">
+        <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div>
+      </td>
+      <td style="padding-left:10px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>OpenAI 兼容 API</strong>：现有代码几乎零成本接入。一个省显存、一个省算力，再裹一层标准接口，三者合到一起，同一张 GPU 就能服务远多于朴素方案的用户。</p>
+      </td>
+    </tr></table>
+  </div>
+
+  <!-- Closing -->
+  <div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:24px 0 0;text-align:center;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#cbd5e1;line-height:2;margin:0;">vLLM 不是这条赛道的唯一选手——极限吞吐有 TensorRT-LLM，前缀复用有 SGLang。<br><br><strong style="color:#818cf8;">但凭着最活跃的社区、最广的模型与硬件支持，它依然是绝大多数团队最稳妥的默认起点。</strong></p>
+  </div>
+
+  <!-- Footer -->
+  <div style="margin-top:36px;padding-top:18px;border-top:1px solid #e2e8f0;">
+    <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0 0 6px;line-height:1.8;">vLLM · PagedAttention · KV cache · 连续批处理 · LLM 推理优化</p>
+    <p style="font-size:11px;color:#cbd5e1;letter-spacing:0.03em;margin:0;line-height:1.8;">参考：vLLM 原始论文（SOSP '23）· docs.vllm.ai · 译自 Amit Shekhar《How does vLLM work?》</p>
+  </div>
+
+  </div><!-- /padding -->
+</div>
