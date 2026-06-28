@@ -35,7 +35,7 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">01</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">01</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">什么是"服务一个 LLM"</p>
@@ -72,7 +72,7 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">02</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">02</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">Prefill、Decode 与 KV cache</p>
@@ -107,14 +107,20 @@
   <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#6366f1;margin:24px 0 10px;">▸ 第二阶段：Decode（一个词一个词往下写）</p>
   <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">接下来进入循环。<strong>每一步，模型都把"到目前为止的全部 token"重新看一遍，再吐出 1 个新 token 接到末尾。</strong>然后拿更长的序列再跑下一步，如此往复。</p>
 
-  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12.5px;color:#334155;line-height:1.9;">
-    <span style="color:#94a3b8;">DECODE 第 1 步</span><br>
-    看：Tell me a joke Why → 吐出 <strong style="color:#6366f1;">did</strong><br>
-    <span style="color:#94a3b8;">DECODE 第 2 步</span><br>
-    看：Tell me a joke Why did → 吐出 <strong style="color:#6366f1;">the</strong><br>
-    <span style="color:#94a3b8;">DECODE 第 3 步</span><br>
-    看：Tell me a joke Why did the → 吐出 <strong style="color:#6366f1;">chicken</strong><br>
-    <span style="color:#94a3b8;">…… 每步长 1 个 token，直到吐出"结束符"或到达上限</span>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;">
+    <div style="background:#f8fafc;border-radius:6px;padding:9px 12px;margin-bottom:7px;">
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 3px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">DECODE 第 1 步 · 看到目前全部</p>
+      <p style="font-family:'Courier New',monospace;font-size:12px;color:#334155;margin:0;line-height:1.6;word-break:break-all;">Tell me a joke Why <span style="color:#94a3b8;">→ 吐</span> <strong style="color:#6366f1;">did</strong></p>
+    </div>
+    <div style="background:#f8fafc;border-radius:6px;padding:9px 12px;margin-bottom:7px;">
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 3px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">DECODE 第 2 步</p>
+      <p style="font-family:'Courier New',monospace;font-size:12px;color:#334155;margin:0;line-height:1.6;word-break:break-all;">Tell me a joke Why did <span style="color:#94a3b8;">→ 吐</span> <strong style="color:#6366f1;">the</strong></p>
+    </div>
+    <div style="background:#f8fafc;border-radius:6px;padding:9px 12px;margin-bottom:7px;">
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 3px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">DECODE 第 3 步</p>
+      <p style="font-family:'Courier New',monospace;font-size:12px;color:#334155;margin:0;line-height:1.6;word-break:break-all;">Tell me a joke Why did the <span style="color:#94a3b8;">→ 吐</span> <strong style="color:#6366f1;">chicken</strong></p>
+    </div>
+    <p style="font-size:12px;color:#94a3b8;margin:8px 0 0;font-family:'PingFang SC','Microsoft YaHei',sans-serif;line-height:1.6;">…… 每步比上一步长 1 个 token，直到吐出"结束符"或到达长度上限。</p>
   </div>
 
   <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;">注意关键一点：decode 的每一步都要回头参考前面所有 token。这正是为什么 prefill 计算密集（一口气算完一长串），而 decode 是逐 token 慢慢挤出来的。</p>
@@ -147,7 +153,7 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">03</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">03</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">问题：KV cache 吞噬显存，朴素方式还在浪费</p>
@@ -169,12 +175,30 @@
     <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">多个请求各占一块，块与块之间散落零碎小空隙，单看任何一处都塞不下一个新请求。</p>
   </div>
 
-  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12px;color:#334155;line-height:1.9;">
-    <span style="color:#94a3b8;">朴素服务：每个请求一块大连续内存</span><br>
-    请求 A：[<span style="color:#16a34a;">用 50</span> ····· 为 2000 预留但浪费 ·····]<br>
-    请求 B：[<span style="color:#16a34a;">用 120</span> ···· 为 2000 预留但浪费 ·····]<br>
-    请求 C：[<span style="color:#16a34a;">用 20</span> ····· 为 2000 预留但浪费 ·····]<br>
-    <span style="color:#be123c;">剩余空闲：零碎小块 → 装不下任何新请求</span>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;">
+    <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">朴素服务 · 每个请求预留一整块连续内存</p>
+    <p style="font-size:12px;color:#475569;margin:0 0 4px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">请求 A</p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:none;border-collapse:collapse;table-layout:fixed;margin-bottom:11px;">
+      <tr>
+        <td style="width:14%;background:#16a34a;color:#ffffff;font-size:10px;text-align:center;padding:6px 0;border-radius:3px 0 0 3px;border:none;">用50</td>
+        <td style="background:#fee2e2;color:#be123c;font-size:10px;text-align:center;padding:6px 0;border-radius:0 3px 3px 0;border:none;">为 2000 预留但浪费</td>
+      </tr>
+    </table>
+    <p style="font-size:12px;color:#475569;margin:0 0 4px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">请求 B</p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:none;border-collapse:collapse;table-layout:fixed;margin-bottom:11px;">
+      <tr>
+        <td style="width:22%;background:#16a34a;color:#ffffff;font-size:10px;text-align:center;padding:6px 0;border-radius:3px 0 0 3px;border:none;">用120</td>
+        <td style="background:#fee2e2;color:#be123c;font-size:10px;text-align:center;padding:6px 0;border-radius:0 3px 3px 0;border:none;">为 2000 预留但浪费</td>
+      </tr>
+    </table>
+    <p style="font-size:12px;color:#475569;margin:0 0 4px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">请求 C</p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:none;border-collapse:collapse;table-layout:fixed;margin-bottom:12px;">
+      <tr>
+        <td style="width:9%;background:#16a34a;color:#ffffff;font-size:10px;text-align:center;padding:6px 0;border-radius:3px 0 0 3px;border:none;">20</td>
+        <td style="background:#fee2e2;color:#be123c;font-size:10px;text-align:center;padding:6px 0;border-radius:0 3px 3px 0;border:none;">为 2000 预留但浪费</td>
+      </tr>
+    </table>
+    <p style="font-size:12px;color:#be123c;margin:0;font-family:'PingFang SC','Microsoft YaHei',sans-serif;line-height:1.6;">剩余空闲都是零碎小块 → 装不下任何新请求</p>
   </div>
 
   <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">于是出现尴尬局面：显卡账面上明明还剩不少显存，实际却只能服务寥寥几个用户。这正是 vLLM 要解决的问题。</p>
@@ -183,7 +207,7 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">04</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">04</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">PagedAttention：把操作系统的分页搬到 KV cache</p>
@@ -208,12 +232,15 @@
     <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">需要更多 token 就从空闲池取一块，不要求物理相邻；请求一结束，占用的块立刻归还空闲池。</p>
   </div>
 
-  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12px;color:#334155;line-height:1.9;">
-    <span style="color:#94a3b8;">物理块池</span> [B1][B2][B3][B4][B5][B6][B7][B8][B9]…<br>
-    请求 A 块表 → B1, B4, B7　<span style="color:#94a3b8;">（按需 3 块）</span><br>
-    请求 B 块表 → B2, B3　　<span style="color:#94a3b8;">（按需 2 块）</span><br>
-    请求 C 块表 → B5　　　　<span style="color:#94a3b8;">（刚开始 1 块）</span><br>
-    <span style="color:#16a34a;">空闲块：B6, B8, B9</span>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;">
+    <p style="font-size:11px;color:#94a3b8;margin:0 0 9px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">物理块池（颜色 = 归属）</p>
+    <p style="margin:0 0 12px;line-height:2.3;">
+      <span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#eef2ff;color:#6366f1;padding:4px 8px;border-radius:4px;margin:2px 3px 2px 0;">B1</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#ede9fe;color:#7c3aed;padding:4px 8px;border-radius:4px;margin:2px 3px 2px 0;">B2</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#ede9fe;color:#7c3aed;padding:4px 8px;border-radius:4px;margin:2px 3px 2px 0;">B3</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#eef2ff;color:#6366f1;padding:4px 8px;border-radius:4px;margin:2px 3px 2px 0;">B4</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#d1faf4;color:#0d9488;padding:4px 8px;border-radius:4px;margin:2px 3px 2px 0;">B5</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#f1f5f9;color:#94a3b8;padding:4px 8px;border-radius:4px;margin:2px 3px 2px 0;">B6</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#eef2ff;color:#6366f1;padding:4px 8px;border-radius:4px;margin:2px 3px 2px 0;">B7</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#f1f5f9;color:#94a3b8;padding:4px 8px;border-radius:4px;margin:2px 3px 2px 0;">B8</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:12px;background:#f1f5f9;color:#94a3b8;padding:4px 8px;border-radius:4px;margin:2px 0;">B9</span>
+    </p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0 0 5px;line-height:1.6;"><span style="color:#6366f1;font-weight:700;">请求 A</span> → B1, B4, B7 <span style="color:#94a3b8;">（按需 3 块）</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0 0 5px;line-height:1.6;"><span style="color:#7c3aed;font-weight:700;">请求 B</span> → B2, B3 <span style="color:#94a3b8;">（按需 2 块）</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0 0 5px;line-height:1.6;"><span style="color:#0d9488;font-weight:700;">请求 C</span> → B5 <span style="color:#94a3b8;">（刚开始 1 块）</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:0;line-height:1.6;">空闲块：B6, B8, B9</p>
   </div>
 
   <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这里要分清两个概念：<strong>逻辑块</strong>是请求自己视角的"第 0、1、2 块"，编号连续；<strong>物理块</strong>是显存里实际占用的那一块，物理位置可散落在任何地方。</p>
@@ -228,7 +255,7 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">05</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">05</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">顺手的红利：PagedAttention 如何共享内存</p>
@@ -247,19 +274,26 @@
     <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.6;">模型同时探索多条候选回答，它们共享同一个开头、只在后面才分叉。开头的块共享，分叉之后再各自分配。</p>
   </div>
 
-  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12px;color:#334155;line-height:1.9;text-align:center;">
-    <span style="color:#94a3b8;">共享开头（物理上只有一份）</span><br>
-    [B1][B2]<br>
-    ┌──────┼──────┐<br>
-    请求A　请求B　Beam C<br>
-    +[B5]　+[B6]　+[B7]
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;text-align:center;">
+    <p style="font-size:11px;color:#94a3b8;margin:0 0 8px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">共享开头（物理上只有一份）</p>
+    <p style="margin:0 0 4px;">
+      <span style="display:inline-block;font-family:'Courier New',monospace;font-size:13px;background:#d1faf4;color:#0d9488;padding:5px 10px;border-radius:4px;margin:0 3px;">B1</span><span style="display:inline-block;font-family:'Courier New',monospace;font-size:13px;background:#d1faf4;color:#0d9488;padding:5px 10px;border-radius:4px;margin:0 3px;">B2</span>
+    </p>
+    <p style="text-align:center;color:#94a3b8;font-size:13px;margin:4px 0 8px;">↓ 分叉后各自分配 ↓</p>
+    <span style="display:inline-block;background:#eef2ff;border:1px solid #c7cef5;border-radius:6px;padding:8px 12px;margin:3px;">
+      <span style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#6366f1;font-weight:700;">请求 A</span> <span style="font-family:'Courier New',monospace;font-size:12px;color:#6366f1;">+B5</span>
+    </span><span style="display:inline-block;background:#eef2ff;border:1px solid #c7cef5;border-radius:6px;padding:8px 12px;margin:3px;">
+      <span style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#6366f1;font-weight:700;">请求 B</span> <span style="font-family:'Courier New',monospace;font-size:12px;color:#6366f1;">+B6</span>
+    </span><span style="display:inline-block;background:#ede9fe;border:1px solid #ddd6fe;border-radius:6px;padding:8px 12px;margin:3px;">
+      <span style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#7c3aed;font-weight:700;">Beam C</span> <span style="font-family:'Courier New',monospace;font-size:12px;color:#7c3aed;">+B7</span>
+    </span>
   </div>
 
   <!-- ===== 章节 06 ===== -->
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">06</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">06</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">连续批处理：让 GPU 一刻不空转</p>
@@ -271,15 +305,36 @@
 
   <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;"><strong>连续批处理</strong>换了思路：在每一个 decode 步都重新决定这一批跑哪些请求——某个请求一结束，就立刻从等待队列拉一个新请求补进它的位置。</p>
 
-  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;font-family:'Courier New',monospace;font-size:12px;color:#334155;line-height:1.9;">
-    <span style="color:#94a3b8;">静态批处理：整批等最慢的</span><br>
-    step　 1 2 3 4 5 6 7 8<br>
-    请求A　X X X <span style="color:#be123c;">完 - - - -</span>　<span style="color:#be123c;">← slot 空转</span><br>
-    请求B　X X X X X X X 完<br>
-    <br>
-    <span style="color:#94a3b8;">连续批处理：finished 立即被填掉</span><br>
-    slot1　<span style="color:#6366f1;">A A A</span> <span style="color:#16a34a;">C C C</span> <span style="color:#7c3aed;">D D</span>　<span style="color:#94a3b8;">← A 完 C 进，C 完 D 进</span><br>
-    slot2　B B B B B B B 完
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:18px 0;">
+    <p style="font-size:11px;color:#be123c;margin:0 0 8px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-weight:700;">静态批处理 · 整批要等最慢的那个</p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:none;border-collapse:collapse;table-layout:fixed;margin-bottom:4px;">
+      <tr>
+        <td style="width:42px;border:none;"></td>
+        <td style="font-size:9px;color:#94a3b8;text-align:center;border:none;">1</td><td style="font-size:9px;color:#94a3b8;text-align:center;border:none;">2</td><td style="font-size:9px;color:#94a3b8;text-align:center;border:none;">3</td><td style="font-size:9px;color:#94a3b8;text-align:center;border:none;">4</td><td style="font-size:9px;color:#94a3b8;text-align:center;border:none;">5</td><td style="font-size:9px;color:#94a3b8;text-align:center;border:none;">6</td><td style="font-size:9px;color:#94a3b8;text-align:center;border:none;">7</td><td style="font-size:9px;color:#94a3b8;text-align:center;border:none;">8</td>
+      </tr>
+      <tr>
+        <td style="width:42px;font-size:11px;color:#475569;border:none;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">请求A</td>
+        <td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">A</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">A</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">A</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#dcfce7;color:#16a34a;border:1px solid #ffffff;">✓</td><td style="font-size:9px;text-align:center;padding:5px 0;background:#f1f5f9;color:#cbd5e1;border:1px solid #ffffff;">空</td><td style="font-size:9px;text-align:center;padding:5px 0;background:#f1f5f9;color:#cbd5e1;border:1px solid #ffffff;">空</td><td style="font-size:9px;text-align:center;padding:5px 0;background:#f1f5f9;color:#cbd5e1;border:1px solid #ffffff;">空</td><td style="font-size:9px;text-align:center;padding:5px 0;background:#f1f5f9;color:#cbd5e1;border:1px solid #ffffff;">空</td>
+      </tr>
+      <tr>
+        <td style="width:42px;font-size:11px;color:#475569;border:none;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">请求B</td>
+        <td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#dcfce7;color:#16a34a;border:1px solid #ffffff;">✓</td>
+      </tr>
+    </table>
+    <p style="font-size:11px;color:#be123c;margin:0 0 14px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">请求A 第 4 步就完了，slot 却空转到第 8 步</p>
+
+    <p style="font-size:11px;color:#16a34a;margin:0 0 8px;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-weight:700;">连续批处理 · 一空出就立刻填掉</p>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border:none;border-collapse:collapse;table-layout:fixed;margin-bottom:4px;">
+      <tr>
+        <td style="width:42px;font-size:11px;color:#475569;border:none;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">slot1</td>
+        <td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">A</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">A</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">A</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#d1faf4;color:#0d9488;border:1px solid #ffffff;">C</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#d1faf4;color:#0d9488;border:1px solid #ffffff;">C</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#d1faf4;color:#0d9488;border:1px solid #ffffff;">C</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#ede9fe;color:#7c3aed;border:1px solid #ffffff;">D</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#ede9fe;color:#7c3aed;border:1px solid #ffffff;">D</td>
+      </tr>
+      <tr>
+        <td style="width:42px;font-size:11px;color:#475569;border:none;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">slot2</td>
+        <td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#eef2ff;color:#6366f1;border:1px solid #ffffff;">B</td><td style="font-size:10px;text-align:center;padding:5px 0;background:#dcfce7;color:#16a34a;border:1px solid #ffffff;">✓</td>
+      </tr>
+    </table>
+    <p style="font-size:11px;color:#16a34a;margin:0;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">A 完 C 立即进，C 完 D 立即进 → GPU 不空转</p>
   </div>
 
   <div style="background:#eef2ff;border:1px solid #d6dbf8;border-radius:8px;padding:18px 22px;margin:24px 0;">
@@ -290,7 +345,7 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">07</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">07</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">OpenAI 兼容 API 与 vLLM 的收益</p>
@@ -321,7 +376,7 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">08</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">08</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">横向对比：SGLang、TensorRT-LLM、LMDeploy</p>
@@ -366,7 +421,7 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
     <tr>
       <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
-        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">09</span>
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7cef5;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">09</span>
       </td>
       <td valign="top" style="border:none;">
         <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">真实世界中的应用</p>
