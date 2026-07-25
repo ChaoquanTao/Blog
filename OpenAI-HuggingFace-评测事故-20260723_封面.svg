@@ -1,0 +1,71 @@
+<svg viewBox="0 0 900 383" xmlns="http://www.w3.org/2000/svg" font-family="'PingFang SC','Microsoft YaHei',sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b5bff"/>
+      <stop offset="55%" stop-color="#5345f0"/>
+      <stop offset="100%" stop-color="#6a3df0"/>
+    </linearGradient>
+    <linearGradient id="rocketBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#dbe2ff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="900" height="383" fill="url(#bg)"/>
+  <circle cx="760" cy="110" r="230" fill="url(#glow)"/>
+  <circle cx="120" cy="330" r="170" fill="url(#glow)"/>
+
+  <g stroke="#ffffff" fill="none" opacity="0.14">
+    <ellipse cx="740" cy="190" rx="170" ry="72" stroke-width="1.5" transform="rotate(-18 740 190)"/>
+    <ellipse cx="740" cy="190" rx="120" ry="48" stroke-width="1.5" transform="rotate(-18 740 190)"/>
+  </g>
+
+  <g fill="#ffffff">
+    <circle cx="180" cy="70" r="2.4" opacity="0.9"/>
+    <circle cx="300" cy="120" r="1.8" opacity="0.6"/>
+    <circle cx="620" cy="60" r="2.2" opacity="0.8"/>
+    <circle cx="840" cy="300" r="2.6" opacity="0.85"/>
+    <circle cx="500" cy="340" r="1.8" opacity="0.55"/>
+    <circle cx="870" cy="150" r="1.8" opacity="0.6"/>
+  </g>
+  <g fill="#ffffff" opacity="0.95">
+    <path d="M270 260 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z"/>
+    <path d="M600 300 l2.4 6.4 6.4 2.4 -6.4 2.4 -2.4 6.4 -2.4 -6.4 -6.4 -2.4 6.4 -2.4 z" opacity="0.7"/>
+  </g>
+
+  <!-- 锁 icon 代替火箭：呼应“安全事故”主题 -->
+  <g transform="translate(720 150) scale(1.05)">
+    <rect x="-38" y="-6" width="76" height="66" rx="12" fill="url(#rocketBody)"/>
+    <path d="M-24 -6 v-20 a24 24 0 0 1 48 0 v20" fill="none" stroke="url(#rocketBody)" stroke-width="10"/>
+    <circle cx="0" cy="24" r="9" fill="#5345f0"/>
+    <rect x="-4" y="24" width="8" height="20" rx="4" fill="#5345f0"/>
+  </g>
+
+  <!-- 顶部标签 -->
+  <g transform="translate(68 56)">
+    <rect x="0" y="0" width="228" height="30" rx="15" fill="#ffffff" opacity="0.18"/>
+    <text x="20" y="20" fill="#ffffff" font-family="Liberation Sans" font-size="14" font-weight="700" letter-spacing="2">AI SECURITY INCIDENT</text>
+  </g>
+
+  <!-- 标题两行 -->
+  <text x="66" y="176" fill="#ffffff" font-size="50" font-weight="800" letter-spacing="1"><tspan font-family="Liberation Sans">OpenAI</tspan> 为了抄答案</text>
+  <text x="66" y="232" fill="#ffffff" font-size="50" font-weight="800" letter-spacing="1">黑穿了 <tspan font-family="Liberation Sans">Hugging Face</tspan></text>
+
+  <!-- 日期 -->
+  <text x="70" y="270" fill="#ffffff" font-family="Liberation Sans" font-size="23" font-weight="700" letter-spacing="3" opacity="0.95">2026.07.16 — 07.23</text>
+  <!-- 副标题 -->
+  <text x="70" y="300" fill="#ffffff" font-size="17" font-weight="500" letter-spacing="1" opacity="0.8"><tspan font-family="Liberation Sans">AI</tspan> 安全事故 <tspan font-family="Liberation Sans">·</tspan> 深度复盘</text>
+
+  <!-- 五色圆点 -->
+  <g transform="translate(70 332)">
+    <circle cx="0" cy="0" r="7" fill="#ef4444"/>
+    <circle cx="24" cy="0" r="7" fill="#2563eb"/>
+    <circle cx="48" cy="0" r="7" fill="#a855f7"/>
+    <circle cx="72" cy="0" r="7" fill="#22c55e"/>
+    <circle cx="96" cy="0" r="7" fill="#f97316"/>
+  </g>
+</svg>

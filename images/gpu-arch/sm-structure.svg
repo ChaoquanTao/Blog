@@ -1,0 +1,75 @@
+<svg viewBox="0 0 860 560" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <rect width="860" height="560" fill="#ffffff"/>
+  <text x="430" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#1a1a2e">GPU 的层级结构（以 NVIDIA H100 为例）</text>
+
+  <!-- GPU chip -->
+  <rect x="40" y="55" width="360" height="440" rx="10" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/>
+  <text x="220" y="82" text-anchor="middle" font-size="15" font-weight="600" fill="#334155">GPU 芯片（132 个 SM）</text>
+
+  <!-- SM grid inside chip -->
+  <g fill="#c7d2fe" stroke="#818cf8" stroke-width="0.8">
+    <rect x="60" y="100" width="70" height="40" rx="3"/><rect x="140" y="100" width="70" height="40" rx="3"/><rect x="220" y="100" width="70" height="40" rx="3"/><rect x="300" y="100" width="70" height="40" rx="3"/>
+    <rect x="60" y="148" width="70" height="40" rx="3"/><rect x="140" y="148" width="70" height="40" rx="3"/><rect x="220" y="148" width="70" height="40" rx="3" fill="#818cf8"/><rect x="300" y="148" width="70" height="40" rx="3"/>
+    <rect x="60" y="196" width="70" height="40" rx="3"/><rect x="140" y="196" width="70" height="40" rx="3"/><rect x="220" y="196" width="70" height="40" rx="3"/><rect x="300" y="196" width="70" height="40" rx="3"/>
+  </g>
+  <text x="220" y="256" text-anchor="middle" font-size="12" fill="#64748b">… ×132 …</text>
+  <text x="105" y="125" text-anchor="middle" font-size="11" fill="#3730a3">SM</text>
+  <text x="255" y="173" text-anchor="middle" font-size="11" fill="#ffffff" font-weight="600">SM</text>
+
+  <!-- L2 -->
+  <rect x="60" y="285" width="320" height="55" rx="5" fill="#93c5fd"/>
+  <text x="220" y="308" text-anchor="middle" font-size="13" font-weight="600" fill="#1e3a8a">L2 Cache（50 MB，全芯片共享）</text>
+  <text x="220" y="327" text-anchor="middle" font-size="11" fill="#1e3a8a">带宽 ~10 TB/s 量级</text>
+
+  <!-- HBM -->
+  <rect x="60" y="360" width="320" height="70" rx="5" fill="#fcd34d"/>
+  <text x="220" y="388" text-anchor="middle" font-size="13" font-weight="600" fill="#78350f">HBM3 显存（80 GB）</text>
+  <text x="220" y="408" text-anchor="middle" font-size="11" fill="#78350f">带宽 3.35 TB/s（对比 CPU DDR5 约 0.1 TB/s）</text>
+
+  <text x="220" y="465" text-anchor="middle" font-size="11" fill="#94a3b8">另有 NVLink / PCIe 与外界互联</text>
+
+  <!-- zoom lines -->
+  <line x1="290" y1="168" x2="450" y2="90" stroke="#818cf8" stroke-width="1.2" stroke-dasharray="5,4"/>
+  <line x1="290" y1="188" x2="450" y2="500" stroke="#818cf8" stroke-width="1.2" stroke-dasharray="5,4"/>
+
+  <!-- SM detail -->
+  <rect x="450" y="70" width="370" height="440" rx="10" fill="#eef2ff" stroke="#818cf8" stroke-width="1.5"/>
+  <text x="635" y="97" text-anchor="middle" font-size="15" font-weight="600" fill="#3730a3">放大一个 SM（Streaming Multiprocessor）</text>
+
+  <!-- warp schedulers -->
+  <rect x="470" y="115" width="330" height="34" rx="4" fill="#fbbf24"/>
+  <text x="635" y="137" text-anchor="middle" font-size="12" font-weight="600" fill="#78350f">4 × Warp 调度器（每周期各发射一条指令）</text>
+
+  <!-- register file -->
+  <rect x="470" y="160" width="330" height="34" rx="4" fill="#f9a8d4"/>
+  <text x="635" y="182" text-anchor="middle" font-size="12" font-weight="600" fill="#831843">寄存器文件 256 KB（64K 个 32-bit 寄存器）</text>
+
+  <!-- cores -->
+  <rect x="470" y="206" width="160" height="150" rx="4" fill="#d1fae5" stroke="#34d399"/>
+  <text x="550" y="230" text-anchor="middle" font-size="12" font-weight="600" fill="#064e3b">128 个 FP32</text>
+  <text x="550" y="248" text-anchor="middle" font-size="12" font-weight="600" fill="#064e3b">CUDA Core</text>
+  <g fill="#34d399">
+    <rect x="486" y="262" width="20" height="14" rx="2"/><rect x="512" y="262" width="20" height="14" rx="2"/><rect x="538" y="262" width="20" height="14" rx="2"/><rect x="564" y="262" width="20" height="14" rx="2"/><rect x="590" y="262" width="20" height="14" rx="2"/>
+    <rect x="486" y="282" width="20" height="14" rx="2"/><rect x="512" y="282" width="20" height="14" rx="2"/><rect x="538" y="282" width="20" height="14" rx="2"/><rect x="564" y="282" width="20" height="14" rx="2"/><rect x="590" y="282" width="20" height="14" rx="2"/>
+    <rect x="486" y="302" width="20" height="14" rx="2"/><rect x="512" y="302" width="20" height="14" rx="2"/><rect x="538" y="302" width="20" height="14" rx="2"/><rect x="564" y="302" width="20" height="14" rx="2"/><rect x="590" y="302" width="20" height="14" rx="2"/>
+  </g>
+  <text x="550" y="340" text-anchor="middle" font-size="10" fill="#065f46">整数 / FP64 单元略</text>
+
+  <rect x="640" y="206" width="160" height="150" rx="4" fill="#e0e7ff" stroke="#818cf8"/>
+  <text x="720" y="235" text-anchor="middle" font-size="12" font-weight="600" fill="#3730a3">4 个 Tensor Core</text>
+  <text x="720" y="256" text-anchor="middle" font-size="10" fill="#3730a3">矩阵乘专用单元</text>
+  <rect x="660" y="272" width="55" height="55" rx="4" fill="#818cf8" opacity="0.7"/>
+  <rect x="726" y="272" width="55" height="55" rx="4" fill="#818cf8" opacity="0.7"/>
+  <text x="720" y="303" text-anchor="middle" font-size="10" fill="#ffffff">D = A×B + C</text>
+
+  <!-- shared mem / L1 -->
+  <rect x="470" y="370" width="330" height="46" rx="4" fill="#93c5fd"/>
+  <text x="635" y="390" text-anchor="middle" font-size="12" font-weight="600" fill="#1e3a8a">L1 Cache / Shared Memory 共 256 KB</text>
+  <text x="635" y="407" text-anchor="middle" font-size="10" fill="#1e3a8a">程序员可显式管理的“片上便签本”</text>
+
+  <!-- misc -->
+  <rect x="470" y="428" width="330" height="30" rx="4" fill="#e2e8f0"/>
+  <text x="635" y="448" text-anchor="middle" font-size="11" fill="#475569">LD/ST 单元 · SFU（特殊函数） · TMA（张量搬运）</text>
+
+  <text x="635" y="490" text-anchor="middle" font-size="11" fill="#64748b">一个 SM 最多常驻 2048 个线程（64 个 warp）</text>
+</svg>

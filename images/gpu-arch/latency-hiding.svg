@@ -1,0 +1,47 @@
+<svg viewBox="0 0 860 400" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <rect width="860" height="400" fill="#ffffff"/>
+  <text x="430" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#1a1a2e">延迟隐藏：GPU 靠“人海战术”掩盖内存延迟</text>
+
+  <!-- CPU row -->
+  <text x="80" y="80" font-size="14" font-weight="600" fill="#334155">CPU 单线程</text>
+  <rect x="80" y="92" width="90" height="34" rx="4" fill="#34d399"/>
+  <text x="125" y="114" text-anchor="middle" font-size="11" fill="#064e3b">计算</text>
+  <rect x="172" y="92" width="330" height="34" rx="4" fill="#fca5a5"/>
+  <text x="337" y="114" text-anchor="middle" font-size="11" fill="#7f1d1d">等待内存（数百个周期，靠缓存/预取/乱序尽量避免）</text>
+  <rect x="504" y="92" width="90" height="34" rx="4" fill="#34d399"/>
+  <text x="549" y="114" text-anchor="middle" font-size="11" fill="#064e3b">计算</text>
+
+  <!-- GPU rows -->
+  <text x="80" y="175" font-size="14" font-weight="600" fill="#334155">GPU 一个 SM 上的多个 warp</text>
+  <!-- warp0 -->
+  <text x="60" y="212" text-anchor="end" font-size="12" fill="#64748b">warp 0</text>
+  <rect x="80" y="196" width="80" height="26" rx="3" fill="#34d399"/>
+  <rect x="162" y="196" width="240" height="26" rx="3" fill="#fecaca"/>
+  <rect x="404" y="196" width="80" height="26" rx="3" fill="#34d399"/>
+  <rect x="486" y="196" width="240" height="26" rx="3" fill="#fecaca"/>
+  <!-- warp1 -->
+  <text x="60" y="246" text-anchor="end" font-size="12" fill="#64748b">warp 1</text>
+  <rect x="80" y="230" width="80" height="26" rx="3" fill="#fecaca"/>
+  <rect x="162" y="230" width="80" height="26" rx="3" fill="#34d399"/>
+  <rect x="244" y="230" width="240" height="26" rx="3" fill="#fecaca"/>
+  <rect x="486" y="230" width="80" height="26" rx="3" fill="#34d399"/>
+  <!-- warp2 -->
+  <text x="60" y="280" text-anchor="end" font-size="12" fill="#64748b">warp 2</text>
+  <rect x="80" y="264" width="162" height="26" rx="3" fill="#fecaca"/>
+  <rect x="244" y="264" width="80" height="26" rx="3" fill="#34d399"/>
+  <rect x="326" y="264" width="240" height="26" rx="3" fill="#fecaca"/>
+  <rect x="568" y="264" width="80" height="26" rx="3" fill="#34d399"/>
+  <!-- warp3 -->
+  <text x="60" y="314" text-anchor="end" font-size="12" fill="#64748b">warp 3</text>
+  <rect x="80" y="298" width="244" height="26" rx="3" fill="#fecaca"/>
+  <rect x="326" y="298" width="80" height="26" rx="3" fill="#34d399"/>
+  <rect x="408" y="298" width="240" height="26" rx="3" fill="#fecaca"/>
+  <rect x="650" y="298" width="80" height="26" rx="3" fill="#34d399"/>
+
+  <!-- legend -->
+  <rect x="80" y="352" width="18" height="14" rx="2" fill="#34d399"/>
+  <text x="104" y="364" font-size="12" fill="#334155">执行指令</text>
+  <rect x="185" y="352" width="18" height="14" rx="2" fill="#fecaca"/>
+  <text x="209" y="364" font-size="12" fill="#334155">等待内存</text>
+  <text x="780" y="364" text-anchor="end" font-size="12" fill="#64748b">调度器每周期挑一个“就绪”的 warp → ALU 永远有活干</text>
+</svg>

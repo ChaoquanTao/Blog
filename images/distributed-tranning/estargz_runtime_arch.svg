@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="-apple-system, 'Segoe UI', 'PingFang SC', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .zone  { font-size: 18px; font-weight: 700; }
+    .name  { font-size: 17px; font-weight: 600; fill: #111; }
+    .label { font-size: 14px; fill: #333; }
+    .small { font-size: 13px; fill: #555; }
+    .mono  { font-size: 13px; fill: #444; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    .comp  { fill: #ffffff; stroke: #616a6b; stroke-width: 1.5; }
+    .arrow { fill: none; stroke: #1f618d; stroke-width: 2.5; marker-end: url(#ah); }
+    .arrow2 { fill: none; stroke: #1f618d; stroke-width: 2.5; marker-end: url(#ah); marker-start: url(#ahs); }
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+    <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="760" fill="#ffffff"/>
+
+  <text x="600" y="44" text-anchor="middle" class="title">Stargz Snapshotter 运行时链路</text>
+  <text x="600" y="72" text-anchor="middle" class="subtitle">容器读文件 → FUSE 拦截 → 本地缓存命中，或跨网络按需回源</text>
+
+  <!-- 区域：K8s 节点 -->
+  <rect x="40" y="90" width="760" height="620" rx="14" fill="#ecf3fb" stroke="#2874a6" stroke-width="2"/>
+  <text x="64" y="122" class="zone" fill="#1a5276">K8s 节点</text>
+
+  <!-- 区域：远端 -->
+  <rect x="860" y="90" width="300" height="620" rx="14" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="2"/>
+  <text x="884" y="122" class="zone" fill="#a04000">远端（跨网络）</text>
+
+  <!-- 区域：容器（节点内） -->
+  <rect x="80" y="440" width="340" height="240" rx="12" fill="#e9f7ef" stroke="#1e8449" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="100" y="468" class="zone" fill="#196f3d">容器</text>
+
+  <!-- kubelet -->
+  <rect x="120" y="140" width="180" height="56" rx="8" class="comp"/>
+  <text x="210" y="174" text-anchor="middle" class="name">kubelet</text>
+
+  <!-- containerd -->
+  <rect x="100" y="280" width="220" height="72" rx="8" class="comp"/>
+  <text x="210" y="308" text-anchor="middle" class="name">containerd</text>
+  <text x="210" y="334" text-anchor="middle" class="mono">proxy_plugin = "stargz"</text>
+
+  <!-- stargz-snapshotter -->
+  <rect x="460" y="270" width="280" height="92" rx="8" class="comp"/>
+  <text x="600" y="304" text-anchor="middle" class="name">stargz-snapshotter</text>
+  <text x="600" y="330" text-anchor="middle" class="mono">(containerd-stargz-grpc)</text>
+  <text x="600" y="352" text-anchor="middle" class="small">查 TOC · 管缓存 · 回源</text>
+
+  <!-- 本地缓存 -->
+  <rect x="520" y="560" width="240" height="80" rx="8" class="comp"/>
+  <text x="640" y="592" text-anchor="middle" class="name">本地缓存（LRU）</text>
+  <text x="640" y="618" text-anchor="middle" class="mono" font-size="12">/var/lib/containerd-stargz-grpc</text>
+
+  <!-- 容器进程 -->
+  <rect x="120" y="490" width="260" height="52" rx="8" class="comp"/>
+  <text x="250" y="522" text-anchor="middle" class="name">容器进程</text>
+
+  <!-- rootfs -->
+  <rect x="120" y="580" width="260" height="72" rx="8" class="comp"/>
+  <text x="250" y="606" text-anchor="middle" class="name" font-size="16">rootfs（FUSE 虚拟目录树）</text>
+  <text x="250" y="632" text-anchor="middle" class="mono">/usr /lib /opt/model ...</text>
+
+  <!-- 制品库 -->
+  <rect x="890" y="250" width="240" height="190" rx="8" class="comp"/>
+  <text x="1010" y="286" text-anchor="middle" class="name">制品库</text>
+  <text x="1010" y="312" text-anchor="middle" class="small">(Artifactory / Harbor …)</text>
+  <rect x="910" y="340" width="200" height="56" rx="6" fill="#fdf6ec" stroke="#ca6f1e" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="1010" y="372" text-anchor="middle" class="mono">eStargz layer (blob)</text>
+
+  <!-- ① kubelet → containerd -->
+  <line x1="210" y1="196" x2="210" y2="278" class="arrow"/>
+  <text x="224" y="242" class="label">① CRI（拉镜像 / 起容器）</text>
+
+  <!-- ② containerd ↔ snapshotter -->
+  <line x1="322" y1="316" x2="458" y2="316" class="arrow2"/>
+  <text x="390" y="300" text-anchor="middle" class="label">② snapshotter gRPC</text>
+  <text x="390" y="340" text-anchor="middle" class="small">(Unix socket)</text>
+
+  <!-- ③ FUSE mount：snapshotter → rootfs -->
+  <path d="M480 364 L480 616 L384 616" class="arrow2"/>
+  <text x="494" y="520" class="label">③ FUSE mount</text>
+  <text x="494" y="542" class="small">读请求被拦截、透传</text>
+
+  <!-- ④ 容器进程 → rootfs -->
+  <line x1="250" y1="542" x2="250" y2="578" class="arrow"/>
+  <text x="262" y="568" class="label">④ open() / read()</text>
+
+  <!-- ⑤ snapshotter ↔ 本地缓存 -->
+  <line x1="640" y1="364" x2="640" y2="558" class="arrow2"/>
+  <text x="654" y="430" class="label">⑤ 查本地缓存</text>
+  <text x="654" y="452" class="small">命中直接返回</text>
+
+  <!-- ⑥ snapshotter → 制品库 -->
+  <line x1="742" y1="316" x2="888" y2="316" class="arrow"/>
+  <text x="815" y="296" text-anchor="middle" class="label">⑥ 缓存未命中</text>
+  <text x="815" y="342" text-anchor="middle" class="label">HTTP Range 按需拉取</text>
+</svg>

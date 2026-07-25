@@ -1,0 +1,50 @@
+<svg viewBox="0 0 860 420" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <rect width="860" height="420" fill="#ffffff"/>
+  <text x="430" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#1a1a2e">CPU vs GPU：晶体管都花在哪了？</text>
+
+  <!-- CPU -->
+  <text x="215" y="70" text-anchor="middle" font-size="16" font-weight="600" fill="#334155">CPU（延迟优先）</text>
+  <rect x="55" y="85" width="320" height="240" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <!-- Control -->
+  <rect x="70" y="100" width="140" height="100" rx="4" fill="#fbbf24" opacity="0.85"/>
+  <text x="140" y="145" text-anchor="middle" font-size="13" font-weight="600" fill="#78350f">控制逻辑</text>
+  <text x="140" y="163" text-anchor="middle" font-size="10" fill="#78350f">乱序执行 · 分支预测</text>
+  <text x="140" y="178" text-anchor="middle" font-size="10" fill="#78350f">寄存器重命名 · 预取</text>
+  <!-- ALU -->
+  <rect x="220" y="100" width="66" height="47" rx="4" fill="#34d399"/>
+  <rect x="294" y="100" width="66" height="47" rx="4" fill="#34d399"/>
+  <rect x="220" y="153" width="66" height="47" rx="4" fill="#34d399"/>
+  <rect x="294" y="153" width="66" height="47" rx="4" fill="#34d399"/>
+  <text x="253" y="128" text-anchor="middle" font-size="12" font-weight="600" fill="#064e3b">ALU</text>
+  <text x="327" y="128" text-anchor="middle" font-size="12" font-weight="600" fill="#064e3b">ALU</text>
+  <text x="253" y="181" text-anchor="middle" font-size="12" font-weight="600" fill="#064e3b">ALU</text>
+  <text x="327" y="181" text-anchor="middle" font-size="12" font-weight="600" fill="#064e3b">ALU</text>
+  <!-- Cache -->
+  <rect x="70" y="210" width="290" height="100" rx="4" fill="#93c5fd"/>
+  <text x="215" y="252" text-anchor="middle" font-size="14" font-weight="600" fill="#1e3a8a">巨大的缓存（L1 / L2 / L3）</text>
+  <text x="215" y="274" text-anchor="middle" font-size="11" fill="#1e3a8a">动辄几十 MB，占据大量芯片面积</text>
+  <text x="215" y="350" text-anchor="middle" font-size="12" fill="#64748b">少量强核心：每个核心又快又“聪明”</text>
+
+  <!-- GPU -->
+  <text x="645" y="70" text-anchor="middle" font-size="16" font-weight="600" fill="#334155">GPU（吞吐优先）</text>
+  <rect x="485" y="85" width="320" height="240" rx="8" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <!-- small control -->
+  <rect x="498" y="98" width="294" height="22" rx="3" fill="#fbbf24" opacity="0.85"/>
+  <text x="645" y="113" text-anchor="middle" font-size="10" font-weight="600" fill="#78350f">轻量控制（顺序执行 · warp 调度器）</text>
+  <!-- ALU grid -->
+  <g fill="#34d399">
+    <rect x="498" y="128" width="32" height="20" rx="2"/><rect x="535" y="128" width="32" height="20" rx="2"/><rect x="572" y="128" width="32" height="20" rx="2"/><rect x="609" y="128" width="32" height="20" rx="2"/><rect x="646" y="128" width="32" height="20" rx="2"/><rect x="683" y="128" width="32" height="20" rx="2"/><rect x="720" y="128" width="32" height="20" rx="2"/><rect x="757" y="128" width="35" height="20" rx="2"/>
+    <rect x="498" y="153" width="32" height="20" rx="2"/><rect x="535" y="153" width="32" height="20" rx="2"/><rect x="572" y="153" width="32" height="20" rx="2"/><rect x="609" y="153" width="32" height="20" rx="2"/><rect x="646" y="153" width="32" height="20" rx="2"/><rect x="683" y="153" width="32" height="20" rx="2"/><rect x="720" y="153" width="32" height="20" rx="2"/><rect x="757" y="153" width="35" height="20" rx="2"/>
+    <rect x="498" y="178" width="32" height="20" rx="2"/><rect x="535" y="178" width="32" height="20" rx="2"/><rect x="572" y="178" width="32" height="20" rx="2"/><rect x="609" y="178" width="32" height="20" rx="2"/><rect x="646" y="178" width="32" height="20" rx="2"/><rect x="683" y="178" width="32" height="20" rx="2"/><rect x="720" y="178" width="32" height="20" rx="2"/><rect x="757" y="178" width="35" height="20" rx="2"/>
+    <rect x="498" y="203" width="32" height="20" rx="2"/><rect x="535" y="203" width="32" height="20" rx="2"/><rect x="572" y="203" width="32" height="20" rx="2"/><rect x="609" y="203" width="32" height="20" rx="2"/><rect x="646" y="203" width="32" height="20" rx="2"/><rect x="683" y="203" width="32" height="20" rx="2"/><rect x="720" y="203" width="32" height="20" rx="2"/><rect x="757" y="203" width="35" height="20" rx="2"/>
+    <rect x="498" y="228" width="32" height="20" rx="2"/><rect x="535" y="228" width="32" height="20" rx="2"/><rect x="572" y="228" width="32" height="20" rx="2"/><rect x="609" y="228" width="32" height="20" rx="2"/><rect x="646" y="228" width="32" height="20" rx="2"/><rect x="683" y="228" width="32" height="20" rx="2"/><rect x="720" y="228" width="32" height="20" rx="2"/><rect x="757" y="228" width="35" height="20" rx="2"/>
+    <rect x="498" y="253" width="32" height="20" rx="2"/><rect x="535" y="253" width="32" height="20" rx="2"/><rect x="572" y="253" width="32" height="20" rx="2"/><rect x="609" y="253" width="32" height="20" rx="2"/><rect x="646" y="253" width="32" height="20" rx="2"/><rect x="683" y="253" width="32" height="20" rx="2"/><rect x="720" y="253" width="32" height="20" rx="2"/><rect x="757" y="253" width="35" height="20" rx="2"/>
+  </g>
+  <text x="645" y="167" text-anchor="middle" font-size="0" fill="#064e3b">ALU</text>
+  <!-- small cache -->
+  <rect x="498" y="281" width="294" height="30" rx="3" fill="#93c5fd"/>
+  <text x="645" y="301" text-anchor="middle" font-size="11" font-weight="600" fill="#1e3a8a">较小的缓存 + 超高带宽显存（HBM）</text>
+  <text x="645" y="350" text-anchor="middle" font-size="12" fill="#64748b">海量简单核心：单个不快，但人多力量大</text>
+
+  <text x="430" y="395" text-anchor="middle" font-size="12" fill="#94a3b8">示意图：面积比例为概念性表达，非实际 die shot 比例</text>
+</svg>

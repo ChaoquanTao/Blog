@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分布式训练之镜像加速（一）</title>
+</head>
+<body style="margin:0;padding:24px 0;background:#f1f5f9;">
+<!--
+主题色（暗紫主题）：
+navy:#0f172a  indigo:#6366f1  indigo_light:#eef2ff  purple:#8b5cf6  rose:#f43f5e
+-->
+<div style="max-width:660px;margin:0 auto;background:#ffffff;">
+
+<!-- ============ Hero ============ -->
+<div style="background:#0f172a;padding:52px 28px 44px;text-align:center;">
+  <div style="display:inline-block;font-size:11px;letter-spacing:0.12em;
+  color:#818cf8;background:rgba(99,102,241,0.15);
+  border:1px solid rgba(99,102,241,0.35);padding:5px 16px;
+  border-radius:20px;margin-bottom:22px;">分布式训练 · 镜像加速系列 · 第一篇</div>
+  <div style="height:10px;"></div>
+  <p style="font-family:'STSong','SimSun',serif;font-size:26px;font-weight:700;
+  color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">
+    如何做到 <span style="color:#818cf8;">"docker pull 瞬间完成"</span>
+  </p>
+  <p style="font-size:13px;color:rgba(255,255,255,0.4);
+  letter-spacing:0.06em;margin:0;line-height:1.7;">
+    容器启动只用到镜像的 6.4%<br>剩下的 93.6%，为什么非要传完才能开始
+  </p>
+  <div style="width:36px;height:2px;background:#6366f1;margin:22px auto 0;"></div>
+</div>
+
+<div style="padding:28px 20px 8px;">
+
+<!-- ============ 导语 Callout ============ -->
+<div style="background:#eef2ff;border-left:4px solid #6366f1;
+padding:16px 18px;margin:6px 0 22px;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;
+  color:#6366f1;margin:0 0 8px;text-transform:uppercase;">问题的起点</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">
+  200 节点同时拉取一个 30 GB 的训练镜像：制品库带宽被打满、GPU 空转 90 分钟。这笔账单已经足够刺眼，但账单里还藏着一个更基础的问题一直没人问：<strong>这 30 GB，容器启动真的用得到吗？</strong>
+  </p>
+</div>
+
+<!-- ============ 01 一个反直觉的数据 ============ -->
+<p style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;
+  color:#6366f1;background:#eef2ff;
+  border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
+  border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">01</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;
+  font-weight:700;color:#0f172a;vertical-align:middle;">一个反直觉的数据</span>
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+2016 年 USENIX FAST 会议上，威斯康辛大学的 Harter 团队发表了一篇题为《Slacker: Fast Distribution with Lazy Docker Containers》的论文。他们做了一个测量实验：让容器从零启动到能对外服务，跟踪它在这段时间里到底读了镜像里的哪些文件。</p>
+
+<div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.2);
+border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;
+  font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">
+  结论令人震惊：容器启动过程中平均只读取了镜像内容的 6.4%。
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+换算到我们的场景：30 GB 的训练镜像，为了让 PyTorch 起来、CUDA 初始化、开始加载 checkpoint —— 真正被读到的可能只有 2 GB 左右。其余 28 GB 是"或许后面会用到"或"永远用不到"的东西：
+</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #6366f1;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">CUDA 里针对特定 GPU 架构的 kernel，但你的卡用不到那个架构</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #6366f1;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">PyTorch 里没被 import 的算子</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #6366f1;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">各种 debug symbols、locale 文件、文档</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #6366f1;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">训练脚本用不到的可视化工具</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #6366f1;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:20px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">一整套预装但从未被调用的依赖</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;
+border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;">
+这个数字有多离谱？打个比方：每次发版我们都在传一整套百科全书，只为让容器能查其中一个词条。
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+那么自然的想法就来了：<strong>既然只需要 6%，为什么不能只传这 6%？其余按需去取？</strong>这个想法太自然了，1970 年代文件系统就有类似思想（demand paging）。为什么容器社区拖到 2016 年才开始认真做？原因非常物理：<strong>OCI 镜像格式本身，不允许你这么干。</strong>
+</p>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ============ 02 OCI 镜像：层是分发的最小单元 ============ -->
+<p style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;
+  color:#6366f1;background:#eef2ff;
+  border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
+  border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">02</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;
+  font-weight:700;color:#0f172a;vertical-align:middle;">OCI 镜像：层是分发的最小单元</span>
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+今天所有主流镜像都遵循 <strong>OCI（Open Container Initiative）镜像规范</strong> —— Docker 镜像格式的标准化版本。在这个规范里，一个镜像由三部分组成：<strong>manifest</strong>（清单，列出镜像有哪些层、config 是谁）、<strong>config</strong>（环境变量、启动命令等元数据）、<strong>layers</strong>（若干个层，每层是一个文件系统变更集，以内容哈希 digest 寻址）。
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+<span style="font-family:'Courier New',Courier,monospace;font-size:13px;
+background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;
+border:1px solid rgba(99,102,241,0.15);">docker pull</span> 的动作就是：读 manifest → 把每一层作为一个完整的 blob 下载下来 → 逐层解压 → 叠加成容器的 rootfs。<strong>层是分发和校验的最小单元</strong>——你要么完整地拿到一层，要么没有这一层，没有中间态。
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+为什么不能只取层里的一部分？随便看一个镜像的 manifest 就能看到：
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:16px 18px;margin:18px 0;overflow-x:auto;">
+<p style="font-family:'Courier New',Courier,monospace;font-size:12px;
+color:#a5b4fc;line-height:1.8;margin:0;">{<br>
+&nbsp;&nbsp;"schemaVersion": 2,<br>
+&nbsp;&nbsp;"layers": [<br>
+&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"mediaType": "...tar+gzip",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"digest": "sha256:31e3...",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"size": 29537434&nbsp;&nbsp;<span style="color:#818cf8;">← 基础系统层 ~28 MB</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"mediaType": "...tar+gzip",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"digest": "sha256:9f2c...",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"size": 3241546824&nbsp;&nbsp;<span style="color:#818cf8;">← CUDA+PyTorch层 ~3 GB</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+&nbsp;&nbsp;]<br>
+}</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+注意两个细节：每一层的 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;">mediaType</span> 是一个 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;">.tar.gz</span> 文件；<span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;">digest</span> 是对整层 blob 算的 SHA256——想校验这一层，必须把整层下载下来。
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:32px;
+  color:#6366f1;line-height:1;margin:0 0 6px;opacity:0.7;">"</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;
+  color:#ffffff;line-height:1.9;margin:0;text-align:justify;">
+  那个 3 GB 的 CUDA + PyTorch 层，哪怕你只想要其中一个 200 KB 的 Python 文件，从格式上讲你也拿不到"其中一部分"。问题就出在这个 tar+gzip 上。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ============ 03 tar.gz：一次性管道的诅咒 ============ -->
+<p style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;
+  color:#6366f1;background:#eef2ff;
+  border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
+  border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">03</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;
+  font-weight:700;color:#0f172a;vertical-align:middle;">tar.gz：一次性管道的诅咒</span>
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+上一节说到，OCI 规范规定每个 layer 就是一个 .tar.gz 文件。这一节就把它拆开，看看它为什么天生反懒加载。
+</p>
+
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin:18px 0;">
+<p style="font-family:'Courier New',Courier,monospace;font-size:12px;
+color:#475569;line-height:1.7;margin:0;text-align:center;">
+[gzip 流头] [压缩字节流 ................] [gzip 流尾]<br>
+<span style="color:#94a3b8;">↑ 一整个连续的 gzip 压缩流</span>
+</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+而 gzip 的压缩用的是 <strong>DEFLATE 算法</strong>，本质是"滑动窗口 + Huffman 编码"。<strong>每个字节的解码都依赖前面若干字节构成的字典</strong>。这意味着：<strong>你不能从中间开始解压。</strong>想读文件 X？必须从头解压整个流，直到解到 X 的位置。
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">这对容器镜像的影响是灾难性的：</p>
+
+<div style="background:#fff1f2;border:1px solid rgba(244,63,94,0.2);
+border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">你不能用 HTTP Range 请求只拉某个文件的字节段（即使拉到了也解不出来）</p>
+</div>
+<div style="background:#fff1f2;border:1px solid rgba(244,63,94,0.2);
+border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">你不能"边下边解、只解你需要的"</p>
+</div>
+<div style="background:#fff1f2;border:1px solid rgba(244,63,94,0.2);
+border-radius:6px;padding:12px 16px;margin-bottom:20px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">无论要不要用，整层必须完整下载 + 完整解压</p>
+</div>
+
+<div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.2);
+border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;
+  font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">
+  这就是"为什么这么多年没人做按需加载"的答案——格式本身就是反懒加载的。
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+社区面对这个问题有两种态度：一是<strong>换掉 tar.gz</strong>，用一个天生支持随机访问的新格式（比如 SquashFS、RAFS）——这是 Nydus 选的路，细节留给下一篇；二是<strong>别换 tar.gz</strong>，想办法让它变得可以随机访问，同时保持格式合法——这是 stargz / eStargz 选的路，是这一节的主角。
+</p>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ============ 04 eStargz 的破局 ============ -->
+<p style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;
+  color:#6366f1;background:#eef2ff;
+  border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
+  border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">04</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;
+  font-weight:700;color:#0f172a;vertical-align:middle;">eStargz 的破局：让 tar.gz 变成 seekable</span>
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+eStargz 全称"extended stargz"。stargz 本身是 Google CRFS 团队在 2019 年提出的"seekable stargz"，eStargz 是社区（主要是 containerd 团队）在它基础上做的增强，加了预取元数据和安全校验。两者格式思想一样，下面统称为 eStargz。
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;
+border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;">
+estargz的核心思想来自于 gzip 规范里一个不太被人提起的性质：<strong>多个独立的 gzip 流首尾拼接得到的字节串，本身也是一个合法的 gzip 文件。</strong>解压器会把它们当成一个连续的流处理。
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+这个性质给了我们一个惊人的操作空间：<strong>如果把 tar 里每一个文件单独 gzip 压缩，得到 N 个小 gzip 流，然后把它们拼起来——结果仍然是一个合法的 .tar.gz。</strong>
+</p>
+
+<svg viewBox="0 0 680 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:100%;display:block;margin:1em auto;font-family:sans-serif;">
+  <rect x="0" y="0" width="680" height="340" fill="#fdfefe" rx="10" stroke="#e0e0e0" stroke-width="1"/>
+
+  <!-- 原版 tar.gz -->
+  <text x="40" y="30" font-size="13" font-weight="700" fill="#64748b">原版 tar.gz（不可 seek）</text>
+  <rect x="40" y="42" width="600" height="64" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5"/>
+  <line x1="240" y1="42" x2="240" y2="106" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+  <line x1="440" y1="42" x2="440" y2="106" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 3"/>
+  <text x="140" y="79" text-anchor="middle" font-size="13" fill="#475569" font-family="'Courier New',monospace">hdr_A｜A</text>
+  <text x="340" y="79" text-anchor="middle" font-size="13" fill="#475569" font-family="'Courier New',monospace">hdr_B｜B</text>
+  <text x="540" y="79" text-anchor="middle" font-size="13" fill="#475569" font-family="'Courier New',monospace">hdr_C｜C</text>
+  <line x1="40" y1="118" x2="640" y2="118" stroke="#94a3b8" stroke-width="1"/>
+  <text x="340" y="134" text-anchor="middle" font-size="12" fill="#94a3b8">└──────────── 一整个连续的 gzip 流 ────────────┘</text>
+  <rect x="40" y="146" width="118" height="24" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="1"/>
+  <text x="99" y="162" text-anchor="middle" font-size="12" font-weight="700" fill="#be123c">✗ 不可寻址</text>
+  <text x="172" y="163" font-size="12" fill="#64748b">想读 C，必须先解压完 A、B</text>
+
+  <!-- eStargz -->
+  <text x="40" y="204" font-size="13" font-weight="700" fill="#16a34a">eStargz（可 seek）</text>
+  <rect x="40" y="216" width="104" height="60" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="92" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#166534" font-family="'Courier New',monospace">gzip</text>
+  <text x="92" y="260" text-anchor="middle" font-size="11" fill="#166534" font-family="'Courier New',monospace">(hdr_A,A)</text>
+
+  <text x="156" y="250" text-anchor="middle" font-size="16" fill="#16a34a">‖</text>
+
+  <rect x="168" y="216" width="104" height="60" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="220" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#166534" font-family="'Courier New',monospace">gzip</text>
+  <text x="220" y="260" text-anchor="middle" font-size="11" fill="#166534" font-family="'Courier New',monospace">(hdr_B,B)</text>
+
+  <text x="284" y="250" text-anchor="middle" font-size="16" fill="#16a34a">‖</text>
+
+  <rect x="296" y="216" width="104" height="60" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="348" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#166534" font-family="'Courier New',monospace">gzip</text>
+  <text x="348" y="260" text-anchor="middle" font-size="11" fill="#166534" font-family="'Courier New',monospace">(hdr_C,C)</text>
+
+  <text x="412" y="250" text-anchor="middle" font-size="16" fill="#16a34a">‖</text>
+
+  <rect x="424" y="216" width="104" height="60" rx="6" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="476" y="242" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca" font-family="'Courier New',monospace">gzip</text>
+  <text x="476" y="260" text-anchor="middle" font-size="11" fill="#4338ca" font-family="'Courier New',monospace">(TOC)</text>
+
+  <text x="540" y="250" text-anchor="middle" font-size="16" fill="#16a34a">‖</text>
+
+  <rect x="552" y="216" width="88" height="60" rx="6" fill="#0f172a"/>
+  <text x="596" y="252" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">footer</text>
+
+  <rect x="40" y="296" width="118" height="24" rx="12" fill="#f0fdf4" stroke="#16a34a" stroke-width="1"/>
+  <text x="99" y="312" text-anchor="middle" font-size="12" font-weight="700" fill="#166534">✓ 可寻址</text>
+  <text x="172" y="313" font-size="12" fill="#64748b">每个文件独立压缩，可单独 Range 取</text>
+</svg>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">关键性质：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #16a34a;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;"><strong>每个文件的字节是一个自包含的 gzip 流</strong>，可以独立解压</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #16a34a;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;"><strong>文件级 HTTP Range 请求成为可能</strong>：知道 A 在字节 [100,187)，就用 Range: bytes=100-186 只拉这段，本地解压得到 A 的内容</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #16a34a;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;"><strong>对不知情的客户端完全透明</strong>：普通 docker pull 拉整个文件、gunzip、untar，得到的还是原来的镜像层，一模一样</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #16a34a;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:20px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;"><strong>不需要修改制品库</strong>：制品库不知道也不关心这是 eStargz，就当普通 layer 存</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+<strong>TOC（Table of Contents）</strong> 是关键索引，也以一个独立 gzip 流的形式追加在末尾。它是一个 JSON，记录了每个文件的字节偏移和大小；名称固定为 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;">stargz.index.json</span>。最末尾还有一个固定大小的 <strong>footer</strong>（eStargz 为 51 字节，legacy stargz 为 47 字节），记录 TOC 在文件中的偏移位置。
+</p>
+
+<svg viewBox="0 0 680 220" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:100%;display:block;margin:1em auto;font-family:sans-serif;">
+  <rect x="0" y="0" width="680" height="220" fill="#fdfefe" rx="10" stroke="#e0e0e0" stroke-width="1"/>
+  <text x="340" y="28" text-anchor="middle" font-size="13" fill="#94a3b8">// eStargz layer 字节布局（从前到后）</text>
+
+  <!-- boxes -->
+  <rect x="40" y="50" width="90" height="60" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="85" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">gzip 流 1</text>
+  <text x="85" y="92" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="'Courier New',monospace">[hdr_A][A]</text>
+
+  <rect x="138" y="50" width="90" height="60" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="183" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">gzip 流 2</text>
+  <text x="183" y="92" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="'Courier New',monospace">[hdr_B][B]</text>
+
+  <rect x="236" y="50" width="90" height="60" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="281" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">gzip 流 3</text>
+  <text x="281" y="92" text-anchor="middle" font-size="10" fill="#94a3b8" font-family="'Courier New',monospace">[hdr_C][C]</text>
+
+  <text x="350" y="86" text-anchor="middle" font-size="18" fill="#94a3b8">⋯</text>
+
+  <rect x="374" y="50" width="128" height="60" rx="6" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="438" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">gzip 流 N+1</text>
+  <text x="438" y="92" text-anchor="middle" font-size="10" fill="#4338ca" font-family="'Courier New',monospace">[hdr_TOC][TOC]</text>
+
+  <rect x="512" y="50" width="90" height="60" rx="6" fill="#0f172a"/>
+  <text x="557" y="74" text-anchor="middle" font-size="12" font-weight="700" fill="#ffffff">footer</text>
+  <text x="557" y="92" text-anchor="middle" font-size="10" fill="#94a3b8">51 字节</text>
+
+  <!-- offset axis -->
+  <line x1="40" y1="130" x2="602" y2="130" stroke="#94a3b8" stroke-width="1.5"/>
+  <polygon points="596,125 596,135 604,130" fill="#94a3b8"/>
+  <line x1="40" y1="126" x2="40" y2="134" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="40" y="150" text-anchor="middle" font-size="11" fill="#64748b" font-family="'Courier New',monospace">0</text>
+  <line x1="138" y1="126" x2="138" y2="134" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="138" y="150" text-anchor="middle" font-size="11" fill="#64748b" font-family="'Courier New',monospace">87</text>
+  <line x1="236" y1="126" x2="236" y2="134" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="236" y="150" text-anchor="middle" font-size="11" fill="#64748b" font-family="'Courier New',monospace">177</text>
+  <text x="560" y="150" text-anchor="middle" font-size="11" fill="#64748b">offset 递增 →</text>
+
+  <text x="40" y="184" font-size="12" fill="#6366f1">TOC 记录每个文件的 offset / size / sha256</text>
+  <text x="40" y="202" font-size="12" fill="#6366f1">footer 记录 TOC 的偏移位置</text>
+</svg>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+客户端只需要两次小的 Range 请求就能拿到索引，之后按文件按需取：
+</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;">
+  <div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.25);
+  border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 2px;">① GET Range: bytes=-51</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">拿到最后 51 字节的 footer，知道 TOC 在什么偏移</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#f0fdf4;border:1px solid rgba(34,197,94,0.3);
+  border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#16a34a;margin:0 0 2px;">② GET Range: bytes=TOC_offset-</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">拿到 TOC（几十 KB），现在知道每个文件在哪</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#fff7ed;border:1px solid rgba(234,88,12,0.3);
+  border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#ea580c;margin:0 0 2px;">③ GET Range: bytes=X-Y</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">按需拉某个文件的字节段</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#0f172a;border-radius:6px;padding:10px 14px;text-align:center;">
+    <p style="font-size:13px;font-weight:700;color:#ffffff;margin:0;">整个 layer 从未被完整下载</p>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:18px 0 14px;text-align:justify;">
+头两次请求加起来通常只有几十 KB，几乎不耗时。<strong>从制品库视角看，你的 docker pull 拉的数据量近乎为零。</strong>容器可以立刻起来，剩下的按需去拿。
+</p>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ============ 05 Prefetch 的必要性 ============ -->
+<p style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;
+  color:#6366f1;background:#eef2ff;
+  border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
+  border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">05</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;
+  font-weight:700;color:#0f172a;vertical-align:middle;">光"按需"还不够：Prefetch 的必要性</span>
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+如果你只做到上一节这一层，会遇到一个新问题。假设容器启动过程中要按顺序读 100 个不同的文件。如果每个文件都要触发一次 HTTP Range 请求，每次网络往返 30 ms，光网络延迟就是 3 秒——而且这 3 秒是<strong>串行阻塞</strong>的（容器进程一定要读到文件 A 才能接着读文件 B）。
+</p>
+
+<div style="background:#fff3ed;border-left:4px solid #e85d04;
+padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;
+  color:#e85d04;margin:0 0 8px;text-transform:uppercase;">工程细节</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">
+  用户看到的现象：docker pull 秒完成，但容器起了 5 秒才能对外服务。这在很多场景下不可接受。问题是：<strong>极致的按需 = 极致的网络往返次数</strong>，这两个约束天然对抗。
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+eStargz 的解法叫 <strong>Prefetch + Landmark</strong>。思路是：在构建时用 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;">ctr-remote optimize</span> 类工具跑一遍镜像，记录启动到"就绪"这段时间按时间顺序访问了哪些文件；把这些"启动期文件"在 tar 流里挪到最前面，让字节物理上连续；再在"启动期文件区"和"其他文件区"之间塞一个特殊的空文件 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;">.prefetch.landmark</span> 标记边界。
+</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;">
+  <div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.25);
+  border-radius:6px;padding:10px 14px;margin-bottom:2px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0;">启动期文件（prefetch zone）</p>
+    <p style="font-size:12px;color:#64748b;margin:2px 0 0;">物理上连续的区域，一个大 Range 请求整段拉下来</p>
+  </div>
+  <p style="text-align:center;color:#e85d04;font-size:13px;margin:4px 0;font-weight:700;">✦ landmark</p>
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;
+  border-radius:6px;padding:10px 14px;">
+    <p style="font-size:13px;font-weight:700;color:#64748b;margin:0;">其他文件（按需）</p>
+    <p style="font-size:12px;color:#94a3b8;margin:2px 0 0;">真的用到了再单文件 Range 取</p>
+  </div>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:18px 0 14px;text-align:justify;">
+启动时的动作变成：读 footer + TOC（两次小请求），从 TOC 中定位 landmark 位置；用<strong>一个大的 Range 请求</strong>把整个 prefetch zone 拉下来（比如几百 MB），容器就能启动了；之后运行中如果读到 prefetch zone 之外的文件，触发单文件 Range 请求，按需拉。这样把 100 次网络往返合并成了 1 次，同时启动期需要的数据也预先在本地了。
+</p>
+
+<div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.2);
+border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;
+  font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">
+  Prefetch 的本质是"批量拉热点"，在"只拉启动需要的那 6%"和"不要让启动变成 N 次小请求"之间取得平衡。
+  </p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ============ 06 运行时：Stargz Snapshotter ============ -->
+<p style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;
+  color:#6366f1;background:#eef2ff;
+  border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
+  border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">06</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;
+  font-weight:700;color:#0f172a;vertical-align:middle;">运行时：Stargz Snapshotter</span>
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+有了 eStargz 格式，还需要一个运行时组件让 containerd 会用它，这个组件叫 <strong>Stargz Snapshotter</strong>。它是 containerd 的一个 <strong>snapshotter 插件</strong>。containerd 用 snapshotter 这个抽象层管理镜像层的存储——默认的是 overlayfs snapshotter，把每一层真的下载并解压到本地目录。Stargz Snapshotter 换掉了这个动作：挂载一个 <strong>FUSE 文件系统（耳熟吧，这篇文章讲过）</strong>，把 eStargz layer 虚拟成一个目录树；容器看到的是正常的目录；当容器进程 open() 或 read() 某文件时，FUSE 拦截系统调用，查 TOC 找到文件字节范围，向制品库发起 HTTP Range 请求，拿到字节，解压，缓存到本地磁盘。
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:32px;
+  color:#6366f1;line-height:1;margin:0 0 6px;opacity:0.7;">"</p>
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;
+  color:#ffffff;line-height:1.9;margin:0;text-align:justify;">
+  对容器进程完全透明：它以为在读本地文件系统，实际上是在触发远程按需拉取。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:18px 0 14px;text-align:justify;">整条链路的组件关系如下：</p>
+
+<svg viewBox="0 0 1200 760" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:100%;display:block;margin:1em auto;font-family:sans-serif;">
+  <rect x="0" y="0" width="1200" height="760" fill="#ffffff" rx="10" stroke="#e0e0e0" stroke-width="1"/>
+
+  <text x="600" y="44" text-anchor="middle" font-size="24" font-weight="600" fill="#111">Stargz Snapshotter 运行时链路</text>
+  <text x="600" y="72" text-anchor="middle" font-size="16" fill="#555">容器读文件 → FUSE 拦截 → 本地缓存命中，或跨网络按需回源</text>
+
+  <!-- 区域：K8s 节点 -->
+  <rect x="40" y="90" width="760" height="620" rx="14" fill="#ecf3fb" stroke="#2874a6" stroke-width="2"/>
+  <text x="64" y="122" font-size="18" font-weight="700" fill="#1a5276">K8s 节点</text>
+
+  <!-- 区域：远端 -->
+  <rect x="860" y="90" width="300" height="620" rx="14" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="2"/>
+  <text x="884" y="122" font-size="18" font-weight="700" fill="#a04000">远端（跨网络）</text>
+
+  <!-- 区域：容器（节点内） -->
+  <rect x="80" y="440" width="340" height="240" rx="12" fill="#e9f7ef" stroke="#1e8449" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="100" y="468" font-size="18" font-weight="700" fill="#196f3d">容器</text>
+
+  <!-- kubelet -->
+  <rect x="120" y="140" width="180" height="56" rx="8" fill="#ffffff" stroke="#616a6b" stroke-width="1.5"/>
+  <text x="210" y="174" text-anchor="middle" font-size="17" font-weight="600" fill="#111">kubelet</text>
+
+  <!-- containerd -->
+  <rect x="100" y="280" width="220" height="72" rx="8" fill="#ffffff" stroke="#616a6b" stroke-width="1.5"/>
+  <text x="210" y="308" text-anchor="middle" font-size="17" font-weight="600" fill="#111">containerd</text>
+  <text x="210" y="334" text-anchor="middle" font-size="13" fill="#444" font-family="'Courier New',monospace">proxy_plugin = "stargz"</text>
+
+  <!-- stargz-snapshotter -->
+  <rect x="460" y="270" width="280" height="92" rx="8" fill="#ffffff" stroke="#616a6b" stroke-width="1.5"/>
+  <text x="600" y="304" text-anchor="middle" font-size="17" font-weight="600" fill="#111">stargz-snapshotter</text>
+  <text x="600" y="330" text-anchor="middle" font-size="13" fill="#444" font-family="'Courier New',monospace">(containerd-stargz-grpc)</text>
+  <text x="600" y="352" text-anchor="middle" font-size="13" fill="#555">查 TOC · 管缓存 · 回源</text>
+
+  <!-- 本地缓存 -->
+  <rect x="520" y="560" width="240" height="80" rx="8" fill="#ffffff" stroke="#616a6b" stroke-width="1.5"/>
+  <text x="640" y="592" text-anchor="middle" font-size="17" font-weight="600" fill="#111">本地缓存（LRU）</text>
+  <text x="640" y="618" text-anchor="middle" font-size="12" fill="#444" font-family="'Courier New',monospace">/var/lib/containerd-stargz-grpc</text>
+
+  <!-- 容器进程 -->
+  <rect x="120" y="490" width="260" height="52" rx="8" fill="#ffffff" stroke="#616a6b" stroke-width="1.5"/>
+  <text x="250" y="522" text-anchor="middle" font-size="17" font-weight="600" fill="#111">容器进程</text>
+
+  <!-- rootfs -->
+  <rect x="120" y="580" width="260" height="72" rx="8" fill="#ffffff" stroke="#616a6b" stroke-width="1.5"/>
+  <text x="250" y="606" text-anchor="middle" font-size="16" font-weight="600" fill="#111">rootfs（FUSE 虚拟目录树）</text>
+  <text x="250" y="632" text-anchor="middle" font-size="13" fill="#444" font-family="'Courier New',monospace">/usr /lib /opt/model ...</text>
+
+  <!-- 制品库 -->
+  <rect x="890" y="250" width="240" height="190" rx="8" fill="#ffffff" stroke="#616a6b" stroke-width="1.5"/>
+  <text x="1010" y="286" text-anchor="middle" font-size="17" font-weight="600" fill="#111">制品库</text>
+  <text x="1010" y="312" text-anchor="middle" font-size="13" fill="#555">(Artifactory / Harbor …)</text>
+  <rect x="910" y="340" width="200" height="56" rx="6" fill="#fdf6ec" stroke="#ca6f1e" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="1010" y="372" text-anchor="middle" font-size="13" fill="#444" font-family="'Courier New',monospace">eStargz layer (blob)</text>
+
+  <!-- ① kubelet → containerd -->
+  <line x1="210" y1="196" x2="210" y2="278" stroke="#1f618d" stroke-width="2.5"/>
+  <polygon points="205,270 215,270 210,280" fill="#1f618d"/>
+  <text x="224" y="242" font-size="14" fill="#333">① CRI（拉镜像 / 起容器）</text>
+
+  <!-- ② containerd ↔ snapshotter -->
+  <line x1="322" y1="316" x2="458" y2="316" stroke="#1f618d" stroke-width="2.5"/>
+  <polygon points="330,311 330,321 320,316" fill="#1f618d"/>
+  <polygon points="450,311 450,321 460,316" fill="#1f618d"/>
+  <text x="390" y="300" text-anchor="middle" font-size="14" fill="#333">② snapshotter gRPC</text>
+  <text x="390" y="340" text-anchor="middle" font-size="13" fill="#555">(Unix socket)</text>
+
+  <!-- ③ FUSE mount：snapshotter ↔ rootfs -->
+  <path d="M480 364 L480 616 L384 616" fill="none" stroke="#1f618d" stroke-width="2.5"/>
+  <polygon points="475,372 485,372 480,362" fill="#1f618d"/>
+  <polygon points="392,611 392,621 382,616" fill="#1f618d"/>
+  <text x="494" y="520" font-size="14" fill="#333">③ FUSE mount</text>
+  <text x="494" y="542" font-size="13" fill="#555">读请求被拦截、透传</text>
+
+  <!-- ④ 容器进程 → rootfs -->
+  <line x1="250" y1="542" x2="250" y2="578" stroke="#1f618d" stroke-width="2.5"/>
+  <polygon points="245,570 255,570 250,580" fill="#1f618d"/>
+  <text x="262" y="568" font-size="14" fill="#333">④ open() / read()</text>
+
+  <!-- ⑤ snapshotter ↔ 本地缓存 -->
+  <line x1="640" y1="364" x2="640" y2="558" stroke="#1f618d" stroke-width="2.5"/>
+  <polygon points="635,372 645,372 640,362" fill="#1f618d"/>
+  <polygon points="635,550 645,550 640,560" fill="#1f618d"/>
+  <text x="654" y="430" font-size="14" fill="#333">⑤ 查本地缓存</text>
+  <text x="654" y="452" font-size="13" fill="#555">命中直接返回</text>
+
+  <!-- ⑥ snapshotter → 制品库 -->
+  <line x1="742" y1="316" x2="888" y2="316" stroke="#1f618d" stroke-width="2.5"/>
+  <polygon points="880,311 880,321 890,316" fill="#1f618d"/>
+  <text x="815" y="296" text-anchor="middle" font-size="14" fill="#333">⑥ 缓存未命中</text>
+  <text x="815" y="342" text-anchor="middle" font-size="14" fill="#333">HTTP Range 按需拉取</text>
+</svg>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:18px 0 14px;text-align:justify;">
+stargz-snapshotter 是一个独立进程，以 containerd 的 <span style="font-family:'Courier New',monospace;font-size:13px;background:#f0f0f8;color:#6366f1;padding:2px 6px;border-radius:4px;">proxy_plugin</span> 方式注册，两者通过 Unix socket 上的 gRPC 通信。这带来一个有意思的结果：<strong>pull 时间几乎为零。</strong>（严格说这条链路走的是 containerd 生态——ctr、nerdctl、Kubernetes；Docker 引擎默认的 pull 路径不经过 snapshotter 插件。本文用"docker pull"只是口语化代称。）
+</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" border="0"
+style="margin:16px 0;border:none;border-collapse:collapse;
+font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;">
+  <tr>
+    <td style="padding:10px 13px;background:#0f172a;
+    color:rgba(255,255,255,0.8);font-weight:500;font-size:13px;">方式</td>
+    <td style="padding:10px 13px;background:#0f172a;
+    color:rgba(255,255,255,0.8);font-weight:500;font-size:13px;">耗时</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;
+    background:#ffffff;color:#334155;">传统 pull（30GB，3Gbps）</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;
+    background:#ffffff;color:#64748b;">~90 秒</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;
+    background:#f8f8fc;color:#334155;">Stargz Snapshotter（footer+TOC）</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;
+    background:#f8f8fc;color:#16a34a;font-weight:700;">&lt;100 毫秒</td>
+  </tr>
+</table>
+
+<div style="background:#eef2ff;border:1px solid rgba(99,102,241,0.2);
+border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;
+  font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">
+  容器可以在 pull 后立刻启动，进入 prefetch 阶段，几秒之内对外服务。从任务下发到容器就绪的端到端时间从分钟级降到秒级。
+  </p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ============ 07 没有银弹 ============ -->
+<p style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;
+  color:#6366f1;background:#eef2ff;
+  border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
+  border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">07</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;
+  font-weight:700;color:#0f172a;vertical-align:middle;">没有银弹</span>
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+eStargz 的问题可以分成两类：<strong>格式设计上的先天不足</strong>，和<strong>运行时实现上的工程隐患</strong>。前者决定它的性能上限，后者决定它的可靠性下限。
+</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:22px 0 10px;">7.1 格式的先天不足</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:20px;">
+  <p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">去重能力弱</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#64748b;margin:0;line-height:1.7;">
+  eStargz 没有改变 OCI 的层模型——制品库存储和寻址的单位仍是整层 blob，文件的 offset/sha256 只用来做层内定位和校验，不是全局内容寻址。团队同时维护 PyTorch 2.3 和 2.4 两个训练镜像，各有一个 3 GB 的 CUDA 层，内容 99% 重叠，只要构建产物有一个字节不同，两层 digest 就不同，只能完整存两份 3 GB——哪怕几百 MB 的 libcudnn.so 完全一样。下一篇会看到，Nydus 走内容寻址：相同内容全局只存一份。
+  </p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:22px 0 10px;">7.2 运行时架构：一层一个 FUSE 挂载</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+第六节的架构图里还藏着一个容易被忽略的事实：<strong>Stargz Snapshotter 的挂载粒度是"层"，不是"镜像"</strong>。每个 remote 层各挂一个独立的 FUSE 文件系统，容器的 rootfs 再由 overlayfs 把这些挂载点作为 lowerdir 逐层叠起来。对一个 28 层的镜像，这意味着：
+</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">节点上多出 28 个 FUSE 挂载点，总数随"镜像数 × 层数"线性增长</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:8px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">查找和读取的间接开销变重：每次 open/lookup 要先穿过 overlayfs 逐层查找，未命中缓存还要经历一次 FUSE 用户态往返</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;
+border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;
+padding:14px 16px;margin-bottom:20px;">
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:13px;color:#334155;margin:0;line-height:1.7;">每个挂载点都是独立故障单元：任一层健康检查失败就判定整个 rootfs unavailable，层数越多越可能有一条掉线拖垮整条链</p>
+</div>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#1a1a2e;
+border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;">
+这是 eStargz 走"在旧格式里雕花"这条路的又一处代价：它完整保留了 OCI 的层结构，也带着"层是独立单元"的一切遗产一起继承下来。下一篇会看到，Nydus 把整个镜像合并成单一的文件系统视图，一个 rootfs 只需要一个挂载点。
+</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0f172a;margin:22px 0 10px;">7.3 运行时的隐患：resolve 超时会退回全量拉取</p>
+
+<div style="background:#fff3ed;border-left:4px solid #e85d04;
+padding:16px 18px;margin:14px 0 22px;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;
+  color:#e85d04;margin:0 0 8px;text-transform:uppercase;">工程细节</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">
+  懒加载的 pull 近乎瞬时是有前提的：每一层都要先完成 resolve——读 footer、拉 TOC、和制品库建立会话——这一步有一个默认 30 秒的 timeout（可配置）。镜像层数较多或 TOC 较大时都有可能导致请求超时。一旦某一层超时，containerd 会<strong>静默回退为传统的全量下载 + 解压</strong>，懒加载的收益直接清零。
+  </p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;
+  background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<p style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-size:11px;font-weight:500;
+  color:#6366f1;background:#eef2ff;
+  border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
+  border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">08</span>
+  <span style="font-family:'STSong','SimSun',serif;font-size:19px;
+  font-weight:700;color:#0f172a;vertical-align:middle;">写在最后</span>
+</p>
+
+<p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;
+line-height:1.9;margin:0 0 14px;text-align:justify;">
+把这一篇串起来看：容器启动平均只读镜像的 6.4%，但 tar.gz 格式天生反随机访问；eStargz 用"拼接 gzip 流 + TOC 索引"在保持 OCI 兼容的前提下撬开了一条按需拉取的缝，Prefetch 解决了"按需"和"网络往返次数"的天然对抗，Stargz Snapshotter 把这一切接进了 containerd。<strong>但它从头到尾都在向 tar.gz 妥协</strong>——去重能力因此受限，挂载点随层数线性膨胀，冷启动还带着超时即回退的隐患。这些代价不是实现没做好，而是"不换格式、只在旧格式里雕花"这条路线本身自带的天花板。
+</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;
+margin:28px 0 0;text-align:center;">
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;
+  color:rgba(255,255,255,0.75);line-height:2;margin:0;">
+  如果不再纠结"跟 tar.gz 兼容"这件事，直接换一个天生支持随机访问、内容寻址、镜像级挂载的格式——会怎样？<br><br>
+  <strong style="color:#818cf8;">这是 Nydus 要回答的问题，也是下一篇的主题。</strong>
+  </p>
+</div>
+
+<div style="margin-top:44px;padding-top:18px;border-top:1px solid #e2e8f0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.8;">
+  分布式训练 · 镜像加速 · eStargz · Stargz Snapshotter · OCI
+  </p>
+</div>
+
+</div>
+</div>
+</body>
+</html>

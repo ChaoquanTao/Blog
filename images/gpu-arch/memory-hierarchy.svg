@@ -1,0 +1,38 @@
+<svg viewBox="0 0 860 460" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <rect width="860" height="460" fill="#ffffff"/>
+  <text x="430" y="32" text-anchor="middle" font-size="20" font-weight="700" fill="#1a1a2e">GPU 内存层级（H100，越往下越大、越慢）</text>
+
+  <!-- pyramid levels as stacked bars -->
+  <!-- registers -->
+  <rect x="330" y="60" width="200" height="56" rx="5" fill="#f9a8d4"/>
+  <text x="430" y="83" text-anchor="middle" font-size="13" font-weight="700" fill="#831843">寄存器</text>
+  <text x="430" y="102" text-anchor="middle" font-size="11" fill="#831843">每 SM 256 KB · 全片约 33 MB · ~1 周期</text>
+
+  <!-- shared/L1 -->
+  <rect x="270" y="128" width="320" height="56" rx="5" fill="#c4b5fd"/>
+  <text x="430" y="151" text-anchor="middle" font-size="13" font-weight="700" fill="#4c1d95">Shared Memory / L1</text>
+  <text x="430" y="170" text-anchor="middle" font-size="11" fill="#4c1d95">每 SM 256 KB · ~30 周期 · 程序员可控</text>
+
+  <!-- L2 -->
+  <rect x="210" y="196" width="440" height="56" rx="5" fill="#93c5fd"/>
+  <text x="430" y="219" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">L2 Cache</text>
+  <text x="430" y="238" text-anchor="middle" font-size="11" fill="#1e3a8a">50 MB 全芯片共享 · 约 200–300 周期</text>
+
+  <!-- HBM -->
+  <rect x="150" y="264" width="560" height="56" rx="5" fill="#fcd34d"/>
+  <text x="430" y="287" text-anchor="middle" font-size="13" font-weight="700" fill="#78350f">HBM3 显存（全局内存）</text>
+  <text x="430" y="306" text-anchor="middle" font-size="11" fill="#78350f">80 GB · 3.35 TB/s · 约 500+ 周期</text>
+
+  <!-- host -->
+  <rect x="90" y="332" width="680" height="56" rx="5" fill="#e2e8f0"/>
+  <text x="430" y="355" text-anchor="middle" font-size="13" font-weight="700" fill="#475569">主机内存（经 PCIe / NVLink）</text>
+  <text x="430" y="374" text-anchor="middle" font-size="11" fill="#475569">TB 级容量 · PCIe 5.0 x16 仅 ~64 GB/s —— 能不跨就不跨</text>
+
+  <!-- arrows -->
+  <text x="740" y="90" font-size="12" fill="#16a34a" font-weight="600">快 / 小</text>
+  <line x1="760" y1="105" x2="760" y2="355" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr)"/>
+  <defs><marker id="arr" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#94a3b8"/></marker></defs>
+  <text x="740" y="382" font-size="12" fill="#dc2626" font-weight="600">慢 / 大</text>
+
+  <text x="430" y="430" text-anchor="middle" font-size="12" fill="#94a3b8">注意“倒置”：寄存器总量（~33 MB）接近 L2，远大于 L1 —— 与 CPU 正好相反</text>
+</svg>
