@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 780" font-family="-apple-system, 'Segoe UI', 'PingFang SC', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .zone  { font-size: 18px; font-weight: 700; }
+    .name  { font-size: 17px; font-weight: 600; fill: #111; }
+    .label { font-size: 14px; fill: #333; }
+    .small { font-size: 13px; fill: #555; }
+    .mono  { font-size: 13px; fill: #444; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    .comp  { fill: #ffffff; stroke: #616a6b; stroke-width: 1.5; }
+    .arrow { fill: none; stroke: #1f618d; stroke-width: 2.5; marker-end: url(#ah); }
+    .arrow2 { fill: none; stroke: #1f618d; stroke-width: 2.5; marker-end: url(#ah); marker-start: url(#ahs); }
+    .barrow { fill: none; stroke: #a04000; stroke-width: 2.5; marker-end: url(#ao); }
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+    <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#a04000"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="780" fill="#ffffff"/>
+
+  <text x="600" y="42" text-anchor="middle" class="title">Nydus 全景：构建、启动与按需取数</text>
+  <text x="600" y="70" text-anchor="middle" class="subtitle">①–④ 控制面：启动只拉 bootstrap，整个镜像一个挂载点　|　⑤–⑦ 数据面：读到才回源</text>
+
+  <!-- 区域：K8s 节点 -->
+  <rect x="40" y="92" width="760" height="640" rx="14" fill="#ecf3fb" stroke="#2874a6" stroke-width="2"/>
+  <text x="64" y="124" class="zone" fill="#1a5276">K8s 节点</text>
+
+  <!-- 区域：远端 -->
+  <rect x="860" y="92" width="300" height="640" rx="14" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="2"/>
+  <text x="884" y="124" class="zone" fill="#a04000">构建期 &amp; 远端</text>
+
+  <!-- 区域：容器 -->
+  <rect x="70" y="474" width="320" height="234" rx="12" fill="#e9f7ef" stroke="#1e8449" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="90" y="502" class="zone" fill="#196f3d">容器</text>
+
+  <!-- kubelet -->
+  <rect x="100" y="142" width="180" height="52" rx="8" class="comp"/>
+  <text x="190" y="175" text-anchor="middle" class="name">kubelet</text>
+
+  <!-- containerd -->
+  <rect x="80" y="252" width="220" height="72" rx="8" class="comp"/>
+  <text x="190" y="281" text-anchor="middle" class="name">containerd</text>
+  <text x="190" y="307" text-anchor="middle" class="mono">snapshotter = "nydus"</text>
+
+  <!-- nydus-snapshotter -->
+  <rect x="420" y="242" width="330" height="94" rx="8" class="comp"/>
+  <text x="585" y="274" text-anchor="middle" class="name">nydus-snapshotter</text>
+  <text x="585" y="299" text-anchor="middle" class="mono">(containerd-nydus-grpc)</text>
+  <text x="585" y="322" text-anchor="middle" class="small">准备 snapshot · 落地 bootstrap · 拉起 daemon</text>
+
+  <!-- nydusd -->
+  <rect x="440" y="392" width="300" height="92" rx="8" class="comp"/>
+  <text x="590" y="423" text-anchor="middle" class="name">nydusd</text>
+  <text x="590" y="448" text-anchor="middle" class="small">挂载 RAFS · 查 bootstrap 定位 chunk</text>
+  <text x="590" y="470" text-anchor="middle" class="mono">image.boot（几 MB 元数据）</text>
+
+  <!-- blobcache -->
+  <rect x="560" y="562" width="220" height="86" rx="8" class="comp"/>
+  <text x="670" y="594" text-anchor="middle" class="name">blobcache</text>
+  <text x="670" y="618" text-anchor="middle" class="mono" font-size="11">/var/lib/containerd-nydus/cache</text>
+  <text x="670" y="638" text-anchor="middle" class="small">生命周期独立于快照</text>
+
+  <!-- 容器进程 -->
+  <rect x="100" y="519" width="260" height="52" rx="8" class="comp"/>
+  <text x="230" y="552" text-anchor="middle" class="name">容器进程（runc）</text>
+
+  <!-- rootfs -->
+  <rect x="100" y="604" width="260" height="78" rx="8" class="comp"/>
+  <text x="230" y="632" text-anchor="middle" class="name" font-size="16">rootfs（overlayfs）</text>
+  <text x="230" y="656" text-anchor="middle" class="mono" font-size="12">lower = RAFS 单挂载点</text>
+  <text x="230" y="674" text-anchor="middle" class="mono" font-size="12">upper = 容器可写层</text>
+
+  <!-- 构建期：nydusify -->
+  <rect x="880" y="146" width="260" height="70" rx="8" class="comp"/>
+  <text x="1010" y="174" text-anchor="middle" class="name" font-size="16">nydusify convert</text>
+  <text x="1010" y="199" text-anchor="middle" class="small">OCI 镜像 → bootstrap + chunk blobs</text>
+
+  <!-- 远端：制品库 / 对象存储 -->
+  <rect x="880" y="256" width="260" height="240" rx="8" class="comp"/>
+  <text x="1010" y="292" text-anchor="middle" class="name">制品库 / 对象存储</text>
+  <text x="1010" y="316" text-anchor="middle" class="small">(Harbor / S3 / OSS …)</text>
+  <rect x="900" y="334" width="220" height="46" rx="6" fill="#fdf6ec" stroke="#ca6f1e" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="1010" y="363" text-anchor="middle" class="mono">bootstrap (image.boot)</text>
+  <rect x="900" y="394" width="220" height="82" rx="6" fill="#fdf6ec" stroke="#ca6f1e" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="1010" y="422" text-anchor="middle" class="mono">chunk 化 blobs</text>
+  <text x="1010" y="450" text-anchor="middle" class="mono" font-size="15">▢ ▢ ▢ ▢ ▢ ▢ ▢ ▢</text>
+  <text x="1010" y="468" text-anchor="middle" class="small">内容寻址 · 各自独立压缩</text>
+
+  <!-- 构建期 push -->
+  <line x1="1010" y1="218" x2="1010" y2="252" class="barrow"/>
+  <text x="1022" y="242" class="small" fill="#a04000">push</text>
+
+  <!-- ① kubelet → containerd -->
+  <line x1="190" y1="194" x2="190" y2="250" class="arrow"/>
+  <text x="204" y="228" class="label">① CRI（拉镜像 / 起容器）</text>
+
+  <!-- ② containerd ↔ snapshotter -->
+  <line x1="302" y1="288" x2="418" y2="288" class="arrow2"/>
+  <text x="360" y="270" text-anchor="middle" class="label">② snapshotter gRPC</text>
+  <text x="360" y="310" text-anchor="middle" class="small">(Unix socket)</text>
+
+  <!-- ③ snapshotter → nydusd -->
+  <line x1="590" y1="338" x2="590" y2="390" class="arrow"/>
+  <text x="604" y="370" class="label">③ 拉起 nydusd（--bootstrap）</text>
+
+  <!-- ④ nydusd → rootfs（RAFS 挂载） -->
+  <path d="M438 450 L404 450 L404 642 L364 642" class="arrow2"/>
+  <text x="412" y="516" class="label">④ RAFS 挂载</text>
+  <text x="412" y="538" class="small">整镜像一个挂载点</text>
+  <text x="412" y="558" class="small">经 nydus-overlayfs</text>
+
+  <!-- ⑤ 容器进程 → rootfs -->
+  <line x1="230" y1="571" x2="230" y2="602" class="arrow"/>
+  <text x="242" y="594" class="label">⑤ open() / read()</text>
+
+  <!-- ⑥ nydusd ↔ blobcache -->
+  <line x1="670" y1="486" x2="670" y2="560" class="arrow2"/>
+  <text x="684" y="512" class="label">⑥ 查 blobcache</text>
+  <text x="684" y="534" class="small">命中直接返回</text>
+
+  <!-- ⑦ nydusd → 远端 -->
+  <line x1="742" y1="432" x2="878" y2="432" class="arrow"/>
+  <text x="812" y="406" text-anchor="middle" class="label">⑦ 未命中</text>
+  <text x="812" y="460" text-anchor="middle" class="small">Range GET chunk</text>
+  <text x="812" y="480" text-anchor="middle" class="small">可合并相邻 chunk</text>
+
+  <!-- 图例 -->
+  <text x="430" y="700" class="small">①–④ 控制面：容器启动路径　　⑤–⑦ 数据面：运行期按需取数</text>
+</svg>

@@ -44,12 +44,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "镜像底层原理.md",
+                "file": "20260831-训练加速之镜像懒加载（二）.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "镜像底层原理"
+              "title": "20260831-训练加速之镜像懒加载（二）"
             }
           }
         ],
@@ -73,7 +73,9 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -110,7 +112,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 405.5
+    "width": 344.25390625
   },
   "right": {
     "id": "d35bbeb7d3459768",
@@ -217,11 +219,18 @@
   },
   "active": "b995b6084f0bf41f",
   "lastOpenFiles": [
-    "Untitled.canvas",
-    "镜像底层原理.md",
-    "分布式训练之镜像加速（三）.md",
-    "分布式训练之镜像加速（一）.md",
+    "分布式训练之镜像加速（二）.md",
+    "images/distributed-tranning/nydus_runtime_arch.svg",
+    "20260831-训练加速之镜像懒加载（二）.md",
+    "分布式训练之镜像加速-dragonfly.md",
     "20260720-训练加速之镜像懒加载（一）.md",
+    "20260731-容器里的RDMA：hostNetwork与SR-IOV的两条路.md",
+    "images/rdma/rdma-write-flow.svg",
+    "images/rdma",
+    "镜像加速选型_eStargz-vs-Nydus.html",
+    "训练加速之镜像懒加载（一）_分享版.html",
+    "镜像底层原理.md",
+    "Untitled.canvas",
     "20260626-vLLM是怎么工作的.md",
     "20260713-深入浅出GPU架构.md",
     "分布式训练之镜像加速（一）_wechat.html",
@@ -245,8 +254,6 @@
     "20191010-一次由继承引发的思考.md",
     "k8s-controller-development-paradigm.md",
     "messenger_social_v2.gif",
-    "messenger_town_v2.gif",
-    "本周科技要闻-20260620_封面.png",
     "本周科技要闻-20260620_wechat.html",
     "本周科技要闻-20260620.md",
     "20191015-https协议.md",
@@ -254,14 +261,9 @@
     "20191106-MySQL索引篇.md",
     "20260616-FUSE：让文件系统工作在用户空间.md",
     "20191002-Spring的一点思考.md",
-    "images/external",
-    "images/distributed-tranning",
     "20191030-海量数据与空间限制面试题.md",
     "numa参考资料.md",
     "从第一性原理理解NUMA.md",
-    "20260510-从第一性原理理解NUMA.md",
-    "20191014-强化学习.md",
-    "20190408-数据库.md",
-    "FUSE_让文件系统工作在用户空间_wechat.html"
+    "20260510-从第一性原理理解NUMA.md"
   ]
 }

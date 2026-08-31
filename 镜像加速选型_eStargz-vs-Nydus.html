@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜像加速技术选型：eStargz vs Nydus</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --ink:#15181c; --ink2:#4a5058; --ink3:#8b929b;
+    --line:#e3e6ea; --accent:#1f618d; --accent-bg:#ecf3fb;
+    --es:#0f766e; --es-bg:#effcf9; --ny:#6d28d9; --ny-bg:#f5f3ff;
+    --warn:#a04000; --warn-bg:#fdf2e9; --ok:#196f3d; --ok-bg:#e9f7ef;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.65;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:920px;margin:0 auto;padding:0 20px 60px;}
+
+  header{background:linear-gradient(120deg,#0f766e 0%,#1f618d 48%,#6d28d9 100%);
+    color:#fff;padding:46px 20px 42px;margin-bottom:-28px;}
+  .hi{max-width:920px;margin:0 auto;}
+  .kick{font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;margin:0 0 10px;}
+  h1{font-size:29px;margin:0 0 10px;font-weight:700;line-height:1.3;}
+  .sub{font-size:15px;opacity:.88;margin:0;max-width:680px;}
+  .tags{margin-top:18px;display:flex;flex-wrap:wrap;gap:7px;}
+  .tag{font-size:12px;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.17);border:1px solid rgba(255,255,255,.24);}
+
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:24px 28px;margin:16px 0;box-shadow:0 1px 2px rgba(16,24,40,.04);}
+  h2{font-size:19px;margin:0 0 16px;font-weight:700;display:flex;align-items:center;gap:10px;}
+  h2 .n{font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-bg);
+    border-radius:5px;padding:3px 8px;flex:none;}
+  h2.es .n{color:var(--es);background:var(--es-bg);}
+  h2.ny .n{color:var(--ny);background:var(--ny-bg);}
+  h3{font-size:15.5px;margin:22px 0 8px;font-weight:650;}
+  h3:first-of-type{margin-top:4px;}
+  ul{margin:0;padding-left:20px;color:var(--ink2);font-size:15.5px;}
+  li{margin:6px 0;}
+  li::marker{color:var(--ink3);}
+  strong{color:var(--ink);font-weight:650;}
+  p{margin:0 0 12px;color:var(--ink2);font-size:15.5px;}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:13px;
+    background:#eef1f4;color:#0b4f6c;padding:1.5px 6px;border-radius:4px;}
+  a{color:var(--accent);}
+
+  .box{border-radius:9px;padding:13px 18px;margin:14px 0 0;font-size:15px;line-height:1.65;}
+  .box b{display:block;font-size:13px;letter-spacing:.03em;margin-bottom:3px;}
+  .box.key{background:var(--ok-bg);border:1px solid #c3e6d0;color:#14532d;} .box.key b{color:var(--ok);}
+  .box.warn{background:var(--warn-bg);border:1px solid #f2d3b3;color:#6b3410;} .box.warn b{color:var(--warn);}
+  .box.info{background:var(--accent-bg);border:1px solid #cfe0f0;color:#123a5c;} .box.info b{color:var(--accent);}
+
+  pre{background:#1e222a;color:#d7dde5;border-radius:9px;padding:16px 18px;overflow-x:auto;
+    font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.6;margin:14px 0;}
+  pre .c{color:#7f8a99;} pre .k{color:#7fd1b9;} pre .p{color:#c4a6f5;}
+
+  figure{margin:16px 0 0;}
+  figure svg{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:9px;background:#fff;}
+  figcaption{font-size:13px;color:var(--ink3);text-align:center;margin-top:8px;}
+
+  table{width:100%;border-collapse:collapse;margin:14px 0 0;font-size:14.5px;}
+  th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;}
+  th{font-size:13px;color:var(--ink3);font-weight:650;background:#fafbfc;}
+  th.es{color:var(--es);background:var(--es-bg);}
+  th.ny{color:var(--ny);background:var(--ny-bg);}
+  td:first-child{font-weight:600;color:var(--ink);}
+  .num td{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:13px;text-align:right;}
+  .num td:first-child,.num td:nth-child(2){text-align:left;font-family:inherit;font-size:14.5px;}
+  .num th{text-align:right;} .num th:first-child,.num th:nth-child(2){text-align:left;}
+  tr.ny-row td:nth-child(2){color:var(--ny);font-weight:650;}
+  .good{color:#0b7a3d;font-weight:650;} .bad{color:#b42318;font-weight:650;}
+
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px;}
+  .cell{border:1px solid var(--line);border-radius:9px;padding:14px 16px;background:#fcfcfd;}
+  .cell.es{border-color:#bfe6df;background:var(--es-bg);}
+  .cell.ny{border-color:#ddd2f7;background:var(--ny-bg);}
+  .cell h4{margin:0 0 6px;font-size:15px;font-weight:700;}
+  .cell.es h4{color:var(--es);} .cell.ny h4{color:var(--ny);}
+  .cell ul{font-size:14px;padding-left:18px;} .cell li{margin:4px 0;}
+  .cell p{margin:0;font-size:14px;line-height:1.6;}
+
+  footer{text-align:center;color:var(--ink3);font-size:13px;padding:28px 20px 0;line-height:1.9;}
+  @media(max-width:700px){
+    h1{font-size:23px;} section{padding:20px 18px;} .two{grid-template-columns:1fr;}
+    table{font-size:13px;} th,td{padding:7px 8px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hi">
+    <p class="kick">内部技术分享 · POC 阶段</p>
+    <h1>镜像加速技术选型：eStargz vs Nydus</h1>
+    <p class="sub">几十 GB 的 AI 镜像，Pod 冷启动绝大部分时间卡在 <code style="background:rgba(255,255,255,.18);color:#fff">Pulling → Pulled</code>。两条"惰性拉取"路线的原理、架构与实测对比。</p>
+    <div class="tags">
+      <span class="tag">Lazy Pulling</span><span class="tag">eStargz</span>
+      <span class="tag">Nydus / RAFS</span><span class="tag">containerd</span><span class="tag">EROFS</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section>
+  <h2><span class="n">00</span>一句话结论</h2>
+  <p><strong>惰性拉取的核心思想：容器不必等镜像下载完，按需只取真正被访问到的数据块即可启动。</strong></p>
+  <div class="two">
+    <div class="cell es">
+      <h4>路线 A · eStargz</h4>
+      <p>在 OCI <code>tar.gz</code> 上做"可随机读"的最小扩展。改动小、100% 兼容现有 registry 与运行时；但去重能力、随机小文件 IO、生态都弱一些。</p>
+    </div>
+    <div class="cell ny">
+      <h4>路线 B · Nydus</h4>
+      <p>为镜像加速专门设计的 RAFS 格式（v6 与 EROFS 兼容）。支持 chunk 级去重、内核态挂载、P2P 分发。能力更强，但引入专用运行时与内核版本要求。</p>
+    </div>
+  </div>
+  <div class="box warn"><b>当前状态：POC，尚未拍板</b>
+    两条路线都做过实现试跑，<strong>倾向 Nydus 但未决定采用</strong>。代价要认清：Nydus 多一个 <code>nydusd</code> 常驻进程、节点侧 containerd 改造、产物非原生 OCI。收益需在灰度节点实测，不要照搬社区数字。
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">01</span>OCI 镜像为什么慢</h2>
+  <p>标准镜像每层是一个 gzip 压缩的 tar 包。启动前 containerd 必须<strong>拉取全部压缩包</strong>，再<strong>解压落盘</strong>展开成 rootfs。两个致命属性：</p>
+  <ul>
+    <li><strong>全量</strong> — 哪怕启动只用到 5% 的文件，也要先下载并解压 100%</li>
+    <li><strong>串行阻塞</strong> — gzip 流不可随机寻址、tar 无目录索引，只能整包顺序解压</li>
+  </ul>
+
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 220" font-family="-apple-system,'PingFang SC',sans-serif">
+      <rect width="900" height="220" fill="#fff"/>
+      <text x="24" y="42" font-size="15" font-weight="700" fill="#15181c">OCI 全量拉取</text>
+      <rect x="180" y="26" width="330" height="30" rx="4" fill="#fde8e8" stroke="#d98880"/>
+      <text x="345" y="46" font-size="12.5" text-anchor="middle" fill="#922b21">拉取全部 layer</text>
+      <rect x="510" y="26" width="200" height="30" rx="4" fill="#fdebd0" stroke="#e0a75e"/>
+      <text x="610" y="46" font-size="12.5" text-anchor="middle" fill="#7e5109">解压落盘</text>
+      <rect x="710" y="26" width="86" height="30" rx="4" fill="#e9f7ef" stroke="#7dcea0"/>
+      <text x="753" y="46" font-size="12.5" text-anchor="middle" fill="#196f3d">启动</text>
+
+      <text x="24" y="112" font-size="15" font-weight="700" fill="#15181c">惰性拉取</text>
+      <rect x="180" y="96" width="76" height="30" rx="4" fill="#eaf2fb" stroke="#7fb3dd"/>
+      <text x="218" y="116" font-size="12" text-anchor="middle" fill="#1a5276">拉元数据</text>
+      <rect x="256" y="96" width="76" height="30" rx="4" fill="#e9f7ef" stroke="#7dcea0"/>
+      <text x="294" y="116" font-size="12.5" text-anchor="middle" fill="#196f3d">启动</text>
+      <rect x="332" y="96" width="464" height="30" rx="4" fill="#f4f6f8" stroke="#c8cfd6" stroke-dasharray="5 4"/>
+      <text x="564" y="116" font-size="12.5" text-anchor="middle" fill="#5d6570">运行期按需取用到的 chunk ······→</text>
+
+      <line x1="180" y1="150" x2="796" y2="150" stroke="#c8cfd6"/>
+      <path d="M294 126 L294 158" stroke="#196f3d" stroke-width="1.6" stroke-dasharray="4 3"/>
+      <path d="M753 56 L753 158" stroke="#922b21" stroke-width="1.6" stroke-dasharray="4 3"/>
+      <text x="294" y="176" font-size="12.5" text-anchor="middle" fill="#196f3d" font-weight="650">秒级可用</text>
+      <text x="753" y="176" font-size="12.5" text-anchor="middle" fill="#922b21" font-weight="650">分钟级</text>
+      <text x="490" y="200" font-size="13" text-anchor="middle" fill="#8b929b">同一个镜像，容器"可对外服务"的时间点差了一个数量级</text>
+    </svg>
+    <figcaption>把"全量 + 串行"改成"按需 + 随机读"</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="n">02</span>惰性拉取的通用原理</h2>
+  <p>两条路线建立在同一组思想上，区别只在于<strong>用什么格式实现"可随机读"</strong>，以及<strong>按需加载发生在用户态还是内核态</strong>。</p>
+  <table>
+    <tr><th style="width:190px">能力</th><th>作用</th></tr>
+    <tr><td>可随机读的镜像格式</td><td>镜像内每个文件 / 数据块能被单独定位、单独取回，不必顺序解压整层</td></tr>
+    <tr><td>元数据与数据分离</td><td>先只拉一份"目录"，就能把 rootfs 挂起来</td></tr>
+    <tr><td>按需加载 on-demand</td><td>容器真正 <code>read()</code> 到某文件时，才通过 HTTP Range 回源对应数据块并缓存</td></tr>
+    <tr><td>预取 prefetch</td><td>对启动关键路径的文件提前批量拉取，减少运行期抖动</td></tr>
+    <tr><td>snapshotter 插件</td><td>containerd 外置 snapshotter，"挂一个懒加载文件系统"当 rootfs，而非解压落盘</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="es"><span class="n">03</span>eStargz：给 tar.gz 打补丁</h2>
+  <h3>格式：seekable tar.gz + TOC</h3>
+  <p>源自 Google CRFS 的 stargz（"seekable tar.gz"），由 containerd 的 <code>stargz-snapshotter</code> 扩展。巧妙之处是<strong>在不破坏 OCI tar.gz 兼容性的前提下让它可随机读</strong>：把每个文件（大文件再切 chunk）各自压成一个独立 gzip 流拼接起来——<strong>多个 gzip 流拼接仍是合法 gzip</strong>——末尾追加 TOC 索引记录每个文件的偏移与长度。</p>
+
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 250" font-family="-apple-system,'PingFang SC',sans-serif">
+      <rect width="900" height="250" fill="#fff"/>
+      <text x="450" y="30" text-anchor="middle" font-size="14" fill="#8b929b">◀────── 整体仍是一个合法的 .tar.gz ──────▶</text>
+      <g stroke="#0f766e" stroke-width="1.6" fill="#effcf9">
+        <rect x="40" y="52" width="150" height="70" rx="6"/>
+        <rect x="190" y="52" width="150" height="70" rx="6"/>
+        <rect x="340" y="52" width="150" height="70" rx="6"/>
+        <rect x="490" y="52" width="80" height="70" rx="6" fill="#f5f6f8"/>
+      </g>
+      <rect x="570" y="52" width="190" height="70" rx="6" fill="#e9f7ef" stroke="#1e8449" stroke-width="1.6"/>
+      <rect x="760" y="52" width="100" height="70" rx="6" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="1.6"/>
+      <g font-size="13" fill="#15181c" text-anchor="middle">
+        <text x="115" y="82">gzip(fileA)</text><text x="265" y="82">gzip(fileB)</text>
+        <text x="415" y="82">gzip(fileC)</text><text x="530" y="82" fill="#8b929b">...</text>
+        <text x="665" y="82" fill="#196f3d">gzip(TOC)</text><text x="810" y="82" fill="#a04000">footer</text>
+      </g>
+      <g font-size="11.5" fill="#8b929b" text-anchor="middle" font-family="'SF Mono',Menlo,monospace">
+        <text x="115" y="104">offset=0</text><text x="265" y="104">offset=87</text>
+        <text x="415" y="104">offset=177</text><text x="665" y="104">stargz.index.json</text>
+        <text x="810" y="104">51 字节</text>
+      </g>
+      <text x="265" y="146" text-anchor="middle" font-size="12.5" fill="#0f766e">↑ 每个文件 / chunk 一个独立 gzip 流，可用 Range 单独取回</text>
+      <path d="M115 158 L115 178 M265 158 L265 178 M415 158 L415 178" stroke="#0f766e" stroke-width="1.4" fill="none" stroke-dasharray="4 3"/>
+      <path d="M115 178 L665 178 L665 130" stroke="#0f766e" stroke-width="1.4" fill="none" stroke-dasharray="4 3"/>
+      <text x="390" y="199" text-anchor="middle" font-size="13" fill="#0f766e">TOC 记录每个文件的 offset / size / ChunkDigest</text>
+      <path d="M810 130 L810 222 L680 222" stroke="#ca6f1e" stroke-width="1.4" fill="none" stroke-dasharray="4 3"/>
+      <text x="670" y="227" text-anchor="end" font-size="13" fill="#a04000">footer 记录 TOC 的偏移</text>
+    </svg>
+    <figcaption>eStargz layer 布局：拼接的独立 gzip 流 + TOC 索引 + 固定 footer</figcaption>
+  </figure>
+
+  <div class="box key"><b>最大优点：零生态改造</b>
+    产物仍是标准 <code>tar.gz</code> 层，<strong>能推到任何标准 registry</strong>（只需支持 HTTP Range）；<strong>不认识 eStargz 的旧运行时把 TOC 当普通文件忽略即可</strong>，退化为普通全量拉取——向后完全兼容。
+  </div>
+
+  <h3>运行时：一层一个 FUSE 挂载</h3>
+  <p>节点侧运行 <code>stargz-snapshotter</code>，读 TOC 后用 FUSE 挂文件系统当 rootfs；容器读文件触发 FUSE 回调 → 按偏移发 Range → 解压返回。</p>
+
+  <figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="-apple-system, 'Segoe UI', 'PingFang SC', sans-serif">
+  <style>
+    .es-title { font-size: 24px; font-weight: 600; fill: #111; }
+    .es-sub { font-size: 16px; fill: #555; }
+    .es-zone { font-size: 18px; font-weight: 700; }
+    .es-name { font-size: 17px; font-weight: 600; fill: #111; }
+    .es-label { font-size: 14px; fill: #333; }
+    .es-small { font-size: 13px; fill: #555; }
+    .es-mono { font-size: 13px; fill: #444; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    .es-comp { fill: #ffffff; stroke: #616a6b; stroke-width: 1.5; }
+    .es-arw { fill: none; stroke: #1f618d; stroke-width: 2.5; marker-end: url(#es-ah); }
+    .es-arw2 { fill: none; stroke: #1f618d; stroke-width: 2.5; marker-end: url(#es-ah); marker-start: url(#es-ahs); }
+  </style>
+  <defs>
+    <marker id="es-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+    <marker id="es-ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="760" fill="#ffffff"/>
+
+  <text x="600" y="44" text-anchor="middle" class="es-title">Stargz Snapshotter 运行时链路</text>
+  <text x="600" y="72" text-anchor="middle" class="es-sub">容器读文件 → FUSE 拦截 → 本地缓存命中，或跨网络按需回源</text>
+
+  <!-- 区域：K8s 节点 -->
+  <rect x="40" y="90" width="760" height="620" rx="14" fill="#ecf3fb" stroke="#2874a6" stroke-width="2"/>
+  <text x="64" y="122" class="es-zone" fill="#1a5276">K8s 节点</text>
+
+  <!-- 区域：远端 -->
+  <rect x="860" y="90" width="300" height="620" rx="14" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="2"/>
+  <text x="884" y="122" class="es-zone" fill="#a04000">远端（跨网络）</text>
+
+  <!-- 区域：容器（节点内） -->
+  <rect x="80" y="440" width="340" height="240" rx="12" fill="#e9f7ef" stroke="#1e8449" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="100" y="468" class="es-zone" fill="#196f3d">容器</text>
+
+  <!-- kubelet -->
+  <rect x="120" y="140" width="180" height="56" rx="8" class="es-comp"/>
+  <text x="210" y="174" text-anchor="middle" class="es-name">kubelet</text>
+
+  <!-- containerd -->
+  <rect x="100" y="280" width="220" height="72" rx="8" class="es-comp"/>
+  <text x="210" y="308" text-anchor="middle" class="es-name">containerd</text>
+  <text x="210" y="334" text-anchor="middle" class="es-mono">proxy_plugin = "stargz"</text>
+
+  <!-- stargz-snapshotter -->
+  <rect x="460" y="270" width="280" height="92" rx="8" class="es-comp"/>
+  <text x="600" y="304" text-anchor="middle" class="es-name">stargz-snapshotter</text>
+  <text x="600" y="330" text-anchor="middle" class="es-mono">(containerd-stargz-grpc)</text>
+  <text x="600" y="352" text-anchor="middle" class="es-small">查 TOC · 管缓存 · 回源</text>
+
+  <!-- 本地缓存 -->
+  <rect x="520" y="560" width="240" height="80" rx="8" class="es-comp"/>
+  <text x="640" y="592" text-anchor="middle" class="es-name">本地缓存（LRU）</text>
+  <text x="640" y="618" text-anchor="middle" class="es-mono" font-size="12">/var/lib/containerd-stargz-grpc</text>
+
+  <!-- 容器进程 -->
+  <rect x="120" y="490" width="260" height="52" rx="8" class="es-comp"/>
+  <text x="250" y="522" text-anchor="middle" class="es-name">容器进程</text>
+
+  <!-- rootfs -->
+  <rect x="120" y="580" width="260" height="72" rx="8" class="es-comp"/>
+  <text x="250" y="606" text-anchor="middle" class="es-name" font-size="16">rootfs（FUSE 虚拟目录树）</text>
+  <text x="250" y="632" text-anchor="middle" class="es-mono">/usr /lib /opt/model ...</text>
+
+  <!-- 制品库 -->
+  <rect x="890" y="250" width="240" height="190" rx="8" class="es-comp"/>
+  <text x="1010" y="286" text-anchor="middle" class="es-name">制品库</text>
+  <text x="1010" y="312" text-anchor="middle" class="es-small">(Artifactory / Harbor …)</text>
+  <rect x="910" y="340" width="200" height="56" rx="6" fill="#fdf6ec" stroke="#ca6f1e" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="1010" y="372" text-anchor="middle" class="es-mono">eStargz layer (blob)</text>
+
+  <!-- ① kubelet → containerd -->
+  <line x1="210" y1="196" x2="210" y2="278" class="es-arw"/>
+  <text x="224" y="242" class="es-label">① CRI（拉镜像 / 起容器）</text>
+
+  <!-- ② containerd ↔ snapshotter -->
+  <line x1="322" y1="316" x2="458" y2="316" class="es-arw2"/>
+  <text x="390" y="300" text-anchor="middle" class="es-label">② snapshotter gRPC</text>
+  <text x="390" y="340" text-anchor="middle" class="es-small">(Unix socket)</text>
+
+  <!-- ③ FUSE mount：snapshotter → rootfs -->
+  <path d="M480 364 L480 616 L384 616" class="es-arw2"/>
+  <text x="494" y="520" class="es-label">③ FUSE mount</text>
+  <text x="494" y="542" class="es-small">读请求被拦截、透传</text>
+
+  <!-- ④ 容器进程 → rootfs -->
+  <line x1="250" y1="542" x2="250" y2="578" class="es-arw"/>
+  <text x="262" y="568" class="es-label">④ open() / read()</text>
+
+  <!-- ⑤ snapshotter ↔ 本地缓存 -->
+  <line x1="640" y1="364" x2="640" y2="558" class="es-arw2"/>
+  <text x="654" y="430" class="es-label">⑤ 查本地缓存</text>
+  <text x="654" y="452" class="es-small">命中直接返回</text>
+
+  <!-- ⑥ snapshotter → 制品库 -->
+  <line x1="742" y1="316" x2="888" y2="316" class="es-arw"/>
+  <text x="815" y="296" text-anchor="middle" class="es-label">⑥ 缓存未命中</text>
+  <text x="815" y="342" text-anchor="middle" class="es-label">HTTP Range 按需拉取</text>
+</svg>
+
+    <figcaption>eStargz 运行时链路：FUSE 拦截 read → 查 TOC → 本地缓存命中或 Range 回源</figcaption>
+  </figure>
+
+  <h3>设计层面的短板</h3>
+  <ul>
+    <li><strong>按层挂载</strong> — N 层 → N 个 FUSE 挂载 + overlayfs 叠加，故障域和查找开销都随层数增长</li>
+    <li><strong>几乎无去重</strong> — 只有 OCI 原生的整层 blob-digest 去重，<strong>连镜像内相同内容都不去重</strong>（同一文件出现两次就存两份），更无跨镜像 chunk 去重</li>
+    <li><strong>用户态 + gzip 解压</strong> — 命中和回源都走用户态 FUSE，随机小文件密集访问开销偏高</li>
+    <li><strong>压缩受限 gzip</strong> — 格式即 seekable tar.gz，用不了 zstd</li>
+    <li><strong>元数据用户态解析</strong> — TOC 是 JSON，大镜像索引本身也不小</li>
+  </ul>
+
+  <div class="box warn"><b>实测踩坑：大镜像冷启动懒加载失败（并发惊群）</b>
+    8.9 GiB 的 vLLM 镜像清缓存后首次冷启动，<strong>偶发回退到全量拉取</strong>。原因：stargz-snapshotter 挂载时会<strong>并发预解析 manifest 里所有邻居层</strong>，冷启动时 token 缓存为空，几十个并发请求几乎同时撞 Bearer 401、各自去取 token，形成鉴权惊群（cache stampede）；个别层 resolve 超时即导致整镜像退回全量拉取。<br>
+    <strong>Nydus 只有一份 bootstrap、没有邻居层可预解析，从根上就没有这个扇出。</strong>
+  </div>
+</section>
+
+<section>
+  <h2 class="ny"><span class="n">04</span>Nydus：重新设计一套格式</h2>
+  <p>CNCF Dragonfly 的子项目，不是"给 tar.gz 打补丁"，而是重新设计了面向镜像加速的只读文件系统格式 <strong>RAFS</strong>（Registry Acceleration File System），配套 <code>nydusd</code> 守护进程、<code>nydus-snapshotter</code>、<code>nydusify</code> 转换器与 Dragonfly P2P 分发。</p>
+
+  <h3>核心数据模型：bootstrap + blobs，chunk 化</h3>
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 300" font-family="-apple-system,'PingFang SC',sans-serif">
+      <rect width="900" height="300" fill="#fff"/>
+      <rect x="40" y="46" width="230" height="132" rx="10" fill="#f5f3ff" stroke="#7c3aed" stroke-width="2"/>
+      <text x="155" y="78" text-anchor="middle" font-size="16" font-weight="700" fill="#5b21b6">bootstrap</text>
+      <text x="155" y="102" text-anchor="middle" font-size="13" fill="#4a5058">镜像级合并文件树</text>
+      <text x="155" y="126" text-anchor="middle" font-size="12" fill="#6b7280">所有层的文件 / 目录</text>
+      <text x="155" y="146" text-anchor="middle" font-size="12" fill="#6b7280">文件 → chunk 映射与偏移</text>
+      <text x="155" y="166" text-anchor="middle" font-size="12" fill="#6b7280">overlay / whiteout 构建时已合并</text>
+
+      <path d="M278 112 L332 112" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#nyar)"/>
+      <defs><marker id="nyar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker></defs>
+
+      <rect x="340" y="46" width="520" height="132" rx="10" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+      <text x="600" y="76" text-anchor="middle" font-size="16" font-weight="700" fill="#9a3412">blobs（按层存储）</text>
+      <g fill="#fed7aa" stroke="#ea580c" stroke-width="1.2">
+        <rect x="366" y="94" width="64" height="34" rx="4"/><rect x="438" y="94" width="64" height="34" rx="4"/>
+        <rect x="510" y="94" width="64" height="34" rx="4" fill="#fdba74"/><rect x="582" y="94" width="64" height="34" rx="4"/>
+        <rect x="654" y="94" width="64" height="34" rx="4" fill="#fdba74"/><rect x="726" y="94" width="64" height="34" rx="4"/>
+        <rect x="798" y="94" width="40" height="34" rx="4" fill="#fef3e7" stroke-dasharray="3 3"/>
+      </g>
+      <g font-size="11" fill="#7c2d12" text-anchor="middle">
+        <text x="398" y="116">chunk</text><text x="470" y="116">chunk</text><text x="542" y="116">chunk</text>
+        <text x="614" y="116">chunk</text><text x="686" y="116">chunk</text><text x="758" y="116">chunk</text>
+        <text x="818" y="116" fill="#b45309">…</text>
+      </g>
+      <text x="600" y="152" text-anchor="middle" font-size="12.5" fill="#4a5058">定长 chunk（Native RAFS 常见 1 MiB）· 按内容寻址 · 每个独立压缩</text>
+      <text x="600" y="170" text-anchor="middle" font-size="12.5" fill="#9a3412">可按偏移单独 Range 取回；相同内容的 chunk 只存一份</text>
+
+      <rect x="40" y="206" width="820" height="66" rx="9" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
+      <text x="64" y="232" font-size="13.5" font-weight="700" fill="#15803d">带来的能力</text>
+      <text x="64" y="256" font-size="13" fill="#166534">镜像内 chunk 级去重（自动） · 跨镜像去重（需 chunk-dict 或 dedup-db） · 只拉 bootstrap 即可挂起整个 rootfs，无需 overlayfs 叠层</text>
+    </svg>
+    <figcaption>元数据（bootstrap）与数据（chunk 化 blobs）彻底分离</figcaption>
+  </figure>
+
+  <h3>RAFS v5 → v6：从用户态 FUSE 到内核态 EROFS</h3>
+  <table>
+    <tr><th style="width:130px"></th><th>RAFS v5</th><th class="ny">RAFS v6（当前主线）</th></tr>
+    <tr><td>元数据解析</td><td>用户态 nydusd 解析私有格式</td><td><strong>内核态</strong>：与 in-kernel EROFS 兼容</td></tr>
+    <tr><td>挂载方式</td><td>FUSE</td><td>EROFS（可走 fscache）/ 也支持 FUSE</td></tr>
+    <tr><td>随机 IO</td><td>每次访问都要用户态往返</td><td>命中缓存直接内核态返回</td></tr>
+    <tr><td>内核要求</td><td>无</td><td>EROFS 块设备需 ≥ 5.16；over fscache 需 ≥ 5.19</td></tr>
+    <tr><td>页缓存</td><td>主要由各层 FUSE 挂载维护</td><td>fscache 后端更利于内核侧复用</td></tr>
+  </table>
+  <p style="margin-top:12px;"><strong>EROFS over fscache</strong> 命中时数据直接由内核 fscache 提供，只有 cache miss 才唤醒 nydusd 回源——省掉系统调用与上下文切换。</p>
+
+  <h3>运行时组件与数据流</h3>
+  <figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 920" role="img" aria-labelledby="rt-title rt-desc">
+              <title id="rt-title">Nydus RAFS v5 运行时组件与数据流</title>
+              <desc id="rt-desc">展示 Kubernetes 节点通过 containerd、nydus-snapshotter 和 nydusd 挂载 RAFS v5 镜像，并从 Artifactory 获取 bootstrap、从 COS 按需读取 chunk、写入节点 blobcache 的过程。</desc>
+
+              <defs>
+                <linearGradient id="rt-bg" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#f8fafc"/>
+                  <stop offset="100%" stop-color="#eef2ff"/>
+                </linearGradient>
+                <linearGradient id="rt-nodeBg" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#ffffff"/>
+                  <stop offset="100%" stop-color="#f8fafc"/>
+                </linearGradient>
+                <filter id="rt-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.10"/>
+                </filter>
+                <marker id="rt-arrow-gray" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L0,6 L9,3 z" fill="#64748b"/>
+                </marker>
+                <marker id="rt-arrow-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L0,6 L9,3 z" fill="#7c3aed"/>
+                </marker>
+                <marker id="rt-arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L0,6 L9,3 z" fill="#2563eb"/>
+                </marker>
+                <marker id="rt-arrow-orange" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L0,6 L9,3 z" fill="#ea580c"/>
+                </marker>
+                <marker id="rt-arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L0,6 L9,3 z" fill="#059669"/>
+                </marker>
+                <style>
+                  .rt-title { font-size: 30px; font-weight: 700; fill: #0f172a; }
+                  .rt-subtitle { font-size: 16px; fill: #64748b; }
+                  .rt-zone-title { font-size: 19px; font-weight: 700; fill: #334155; }
+                  .rt-box-title { font-size: 18px; font-weight: 700; fill: #0f172a; }
+                  .rt-box-sub { font-size: 14px; fill: #64748b; }
+                  .rt-label { font-size: 14px; font-weight: 600; }
+                  .rt-note { font-size: 13px; fill: #475569; }
+                </style>
+              </defs>
+
+              <rect width="1440" height="920" fill="url(#rt-bg)"/>
+
+              <text x="70" y="62" class="rt-title">Nydus RAFS v5：运行时组件与按需数据流</text>
+              <text x="70" y="91" class="rt-subtitle">Artifactory 保存镜像入口与 bootstrap；文件内容以 RAFS data blob 存放在 COS，节点仅缓存实际访问的 chunk/range</text>
+
+              <rect x="70" y="125" width="1300" height="190" rx="20" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#rt-shadow)"/>
+              <text x="96" y="160" class="rt-zone-title">远端制品与数据存储</text>
+
+              <rect x="110" y="184" width="370" height="96" rx="14" fill="#f5f3ff" stroke="#8b5cf6" stroke-width="1.5"/>
+              <circle cx="145" cy="218" r="17" fill="#7c3aed"/>
+              <path d="M137 218h16M145 210v16" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/>
+              <text x="176" y="215" class="rt-box-title">Artifactory / OCI Registry</text>
+              <text x="176" y="240" class="rt-box-sub">manifest、镜像配置、bootstrap 元数据层</text>
+              <text x="176" y="262" class="rt-box-sub">体积小，启动挂载前获取</text>
+
+              <rect x="535" y="184" width="405" height="96" rx="14" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+              <circle cx="570" cy="218" r="17" fill="#ea580c"/>
+              <path d="M561 213h18v12h-18z M564 209h12" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
+              <text x="601" y="215" class="rt-box-title">COS · S3-compatible Backend</text>
+              <text x="601" y="240" class="rt-box-sub">RAFS data blobs（内部由 chunk 组成）</text>
+              <text x="601" y="262" class="rt-box-sub">运行时通过 Range GET 按需回源</text>
+
+              <rect x="995" y="184" width="330" height="96" rx="14" fill="#f0fdfa" stroke="#14b8a6" stroke-width="1.5" stroke-dasharray="7 5"/>
+              <circle cx="1030" cy="218" r="17" fill="#0f766e"/>
+              <path d="M1022 218h16M1026 212l-6 6 6 6M1034 212l6 6-6 6" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <text x="1061" y="215" class="rt-box-title">Dragonfly P2P（可选）</text>
+              <text x="1061" y="240" class="rt-box-sub">替代或分担远端数据回源</text>
+              <text x="1061" y="262" class="rt-box-sub">是否接入取决于部署配置</text>
+
+              <rect x="70" y="350" width="1300" height="460" rx="22" fill="url(#rt-nodeBg)" stroke="#94a3b8" stroke-width="1.5" filter="url(#rt-shadow)"/>
+              <rect x="70" y="350" width="1300" height="48" rx="22" fill="#e2e8f0"/>
+              <path d="M70 376v22h1300v-22" fill="#e2e8f0"/>
+              <text x="96" y="381" class="rt-zone-title">Kubernetes 节点</text>
+              <text x="1265" y="381" class="rt-box-sub" text-anchor="end">RAFS v5 · FUSE 路径</text>
+
+              <text x="102" y="438" class="rt-note">创建与挂载</text>
+
+              <rect x="110" y="457" width="190" height="76" rx="13" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+              <text x="205" y="487" class="rt-box-title" text-anchor="middle">kubelet</text>
+              <text x="205" y="512" class="rt-box-sub" text-anchor="middle">CRI 请求</text>
+
+              <rect x="355" y="457" width="190" height="76" rx="13" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+              <text x="450" y="487" class="rt-box-title" text-anchor="middle">containerd</text>
+              <text x="450" y="512" class="rt-box-sub" text-anchor="middle">镜像与容器生命周期</text>
+
+              <rect x="600" y="457" width="245" height="76" rx="13" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+              <text x="722" y="487" class="rt-box-title" text-anchor="middle">nydus-snapshotter</text>
+              <text x="722" y="512" class="rt-box-sub" text-anchor="middle">snapshot / daemon / mount 管理</text>
+
+              <rect x="900" y="443" width="260" height="104" rx="15" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+              <text x="1030" y="480" class="rt-box-title" text-anchor="middle">nydusd</text>
+              <text x="1030" y="506" class="rt-box-sub" text-anchor="middle">解析 bootstrap · 定位 chunk</text>
+              <text x="1030" y="528" class="rt-box-sub" text-anchor="middle">校验 · 解压 · 回源 · 缓存</text>
+
+              <line x1="300" y1="495" x2="345" y2="495" stroke="#64748b" stroke-width="2.5" marker-end="url(#rt-arrow-gray)"/>
+              <line x1="545" y1="495" x2="590" y2="495" stroke="#64748b" stroke-width="2.5" marker-end="url(#rt-arrow-gray)"/>
+              <line x1="845" y1="495" x2="890" y2="495" stroke="#64748b" stroke-width="2.5" marker-end="url(#rt-arrow-gray)"/>
+              <text x="324" y="479" class="rt-label" fill="#64748b" text-anchor="middle">①</text>
+              <text x="567" y="479" class="rt-label" fill="#64748b" text-anchor="middle">proxy</text>
+              <text x="868" y="479" class="rt-label" fill="#64748b" text-anchor="middle">启动/复用</text>
+
+              <line x1="90" y1="574" x2="1350" y2="574" stroke="#e2e8f0" stroke-width="1.5"/>
+              <text x="102" y="616" class="rt-note">首次文件读取</text>
+
+              <rect x="110" y="637" width="225" height="88" rx="13" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+              <text x="222" y="670" class="rt-box-title" text-anchor="middle">业务容器</text>
+              <text x="222" y="697" class="rt-box-sub" text-anchor="middle">read("/path/file")</text>
+
+              <rect x="395" y="637" width="245" height="88" rx="13" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+              <text x="517" y="670" class="rt-box-title" text-anchor="middle">VFS / FUSE mount</text>
+              <text x="517" y="697" class="rt-box-sub" text-anchor="middle">整镜像合并后的只读 rootfs</text>
+
+              <rect x="900" y="630" width="260" height="102" rx="15" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+              <text x="1030" y="664" class="rt-box-title" text-anchor="middle">节点 blobcache</text>
+              <text x="1030" y="690" class="rt-box-sub" text-anchor="middle">以 blob ID 命名的稀疏文件</text>
+              <text x="1030" y="712" class="rt-box-sub" text-anchor="middle">按实际读取的 chunk/range 填充</text>
+
+              <line x1="335" y1="681" x2="385" y2="681" stroke="#2563eb" stroke-width="3" marker-end="url(#rt-arrow-blue)"/>
+              <path d="M640 681 H720 Q745 681 745 656 V590 Q745 565 770 565 H875 Q900 565 900 540" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#rt-arrow-blue)"/>
+              <path d="M1030 547 V620" fill="none" stroke="#2563eb" stroke-width="3" marker-end="url(#rt-arrow-blue)"/>
+              <text x="360" y="665" class="rt-label" fill="#2563eb" text-anchor="middle">③ read</text>
+              <text x="774" y="592" class="rt-label" fill="#2563eb">FUSE 请求</text>
+              <text x="1044" y="588" class="rt-label" fill="#2563eb">④ 查缓存</text>
+
+              <path d="M295 280 V325 Q295 340 310 340 H722 V447" fill="none" stroke="#7c3aed" stroke-width="3" stroke-dasharray="8 5" marker-end="url(#rt-arrow-purple)"/>
+              <text x="430" y="334" class="rt-label" fill="#7c3aed">② 获取 bootstrap，建立合并文件系统视图</text>
+
+              <path d="M738 280 V315 Q738 330 753 330 H1245 Q1270 330 1270 355 V495 Q1270 520 1245 520 H1170" fill="none" stroke="#ea580c" stroke-width="3" marker-end="url(#rt-arrow-orange)"/>
+              <text x="1000" y="326" class="rt-label" fill="#ea580c">⑤ miss：Range GET 返回目标数据范围</text>
+
+              <path d="M1160 280 V305 Q1160 318 1173 318 H1300 Q1320 318 1320 338 V475 Q1320 500 1295 500 H1170" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-dasharray="7 5" marker-end="url(#rt-arrow-green)"/>
+
+              <path d="M1090 547 V620" fill="none" stroke="#059669" stroke-width="3" marker-end="url(#rt-arrow-green)"/>
+              <path d="M900 716 H665 Q645 716 645 696 V746 Q645 766 625 766 H222 V735" fill="none" stroke="#059669" stroke-width="3" marker-end="url(#rt-arrow-green)"/>
+              <text x="690" y="756" class="rt-label" fill="#059669">⑥ 校验、解压并写缓存；数据返回容器</text>
+
+              <rect x="70" y="838" width="1300" height="54" rx="12" fill="#ffffff" stroke="#cbd5e1"/>
+              <text x="96" y="871" class="rt-note" font-weight="700">图例</text>
+              <line x1="155" y1="866" x2="205" y2="866" stroke="#64748b" stroke-width="3" marker-end="url(#rt-arrow-gray)"/>
+              <text x="220" y="871" class="rt-note">控制/生命周期</text>
+              <line x1="370" y1="866" x2="420" y2="866" stroke="#7c3aed" stroke-width="3" stroke-dasharray="7 4" marker-end="url(#rt-arrow-purple)"/>
+              <text x="435" y="871" class="rt-note">bootstrap 元数据</text>
+              <line x1="605" y1="866" x2="655" y2="866" stroke="#2563eb" stroke-width="3" marker-end="url(#rt-arrow-blue)"/>
+              <text x="670" y="871" class="rt-note">文件读取/缓存查询</text>
+              <line x1="865" y1="866" x2="915" y2="866" stroke="#ea580c" stroke-width="3" marker-end="url(#rt-arrow-orange)"/>
+              <text x="930" y="871" class="rt-note">远端数据回源</text>
+              <line x1="1085" y1="866" x2="1135" y2="866" stroke="#059669" stroke-width="3" marker-end="url(#rt-arrow-green)"/>
+              <text x="1150" y="871" class="rt-note">缓存填充/数据返回</text>
+            </svg>
+    <figcaption>RAFS v5 · FUSE 路径：bootstrap 从 registry 拉，data blob 按需从对象存储 Range 回源</figcaption>
+  </figure>
+  <ul style="margin-top:14px;">
+    <li><code>nydus-snapshotter</code> — containerd 外置 snapshotter（<code>proxy_plugins</code> 注册），按镜像拉起 <code>nydusd</code> 并挂载；支持 FUSE / fscache(EROFS) / virtiofs 后端</li>
+    <li><code>nydusd</code> — 核心守护进程：挂载 RAFS、解析 bootstrap、处理 on-demand chunk 回源与本地缓存</li>
+    <li><code>nydusify</code> — 转换器：pull OCI → 转 Nydus → push 回 registry，并能 <code>check</code> 校验</li>
+    <li><strong>Dragonfly P2P（可选）</strong> — 节点间 P2P 分发 blob，避免大规模集群回源打爆 registry</li>
+  </ul>
+
+  <div class="box warn"><b>需要注意</b>
+    blobcache <strong>没有容量淘汰机制</strong>，依赖 kubelet GC：kubelet 负责"选择并触发删除未使用镜像"，containerd / nydus-snapshotter 负责按引用关系回收 snapshot 和整个 blobcache。<strong>目前缺少对活跃镜像做 chunk 级容量淘汰的能力。</strong>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">05</span>启动全流程对比</h2>
+  <p>例子：一个 <strong>~20 GB、约 40 层</strong>的 vLLM 推理镜像，启动阶段实际只 import 了其中几百 MB 的 Python / CUDA 库。</p>
+  <table>
+    <tr><th style="width:110px">步骤</th><th class="es">eStargz · 按层懒加载</th><th class="ny">Nydus · 合并挂载懒加载</th></tr>
+    <tr><td>① 拉索引</td><td>拉各层 manifest + <strong>每层 TOC</strong>（KB~MB，不含数据）</td><td>拉<strong>一份 bootstrap</strong>（整镜像合并元数据）</td></tr>
+    <tr><td>② 挂 rootfs</td><td>每层各建 remote snapshot、各挂一个 FUSE，用 <strong>overlayfs 叠 ~40 层</strong></td><td>拉起一个 <code>nydusd</code>、<strong>单个合并挂载</strong>直接当 rootfs</td></tr>
+    <tr><td>③ 启动</td><td colspan="2" style="text-align:center;color:var(--ink3)">容器启动，几乎没下载文件数据</td></tr>
+    <tr><td>④ 首次 read</td><td>命中该文件所在层 FUSE → 查该层 TOC → 一个 Range 拉回该文件 gzip 流 → gzip 解压</td><td>page cache miss → 定位 chunk → Range 拉回目标 chunk（<strong>必要时合并相邻 chunk</strong>）→ 解压 → 写 blobcache + 页缓存</td></tr>
+    <tr><td>⑤ 缓存单位</td><td>按 layer blob 的字节范围；获取单位通常对应单个文件的 gzip 数据范围</td><td>按 RAFS chunk，必要时合并相邻 chunk 预读</td></tr>
+    <tr><td>⑥ 内容复用</td><td>相同 OCI layer blob 可复用缓存；<strong>不做跨文件 / 跨层去重</strong></td><td>同一 blob/chunk 引用可复用；跨镜像共享取决于 chunk-dict 与运行时配置</td></tr>
+    <tr><td>⑦ 未访问</td><td>未访问的层与文件<strong>永不下载</strong></td><td>未访问的 chunk <strong>永不下载</strong></td></tr>
+  </table>
+  <div class="box info"><b>五处关键差异</b>
+    挂 rootfs（N 挂载 + overlayfs vs 1 合并挂载）· 回源单位（一段 gzip 流 vs chunk 可合并预读）· 解压与命中路径（gzip + 用户态 FUSE vs zstd + 可选内核态）· 缓存定位（layer 字节范围 vs RAFS chunk）· 内容复用能力（layer blob 级 vs chunk 级）
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">06</span>横向对比</h2>
+  <table>
+    <tr><th style="width:150px">维度</th><th class="es">eStargz</th><th class="ny">Nydus (RAFS v6)</th></tr>
+    <tr><td>格式本质</td><td>OCI tar.gz 的可随机读扩展（多 gzip 流 + TOC）</td><td>专用只读 FS · RAFS，bootstrap + chunk 化 blobs</td></tr>
+    <tr><td>与 OCI 兼容</td><td>✅ 完全兼容，旧运行时可退化全量拉取</td><td>⚠️ 产物非原生 OCI 层，需 Nydus 运行时</td></tr>
+    <tr><td>registry 要求</td><td>任意标准 registry（需 HTTP Range）</td><td>任意标准 registry（作为普通 blob 存储）</td></tr>
+    <tr><td>去重粒度</td><td>仅整层 blob-digest 级，<strong>无内容级 / 跨镜像 chunk 去重</strong></td><td>chunk 级；同镜像内自动，跨镜像需 chunk-dict</td></tr>
+    <tr><td>挂载模型</td><td><strong>按层挂载</strong>：N 层 → N 个 FUSE + overlayfs</td><td>整镜像一个合并挂载（与层数无关）</td></tr>
+    <tr><td>按需加载位置</td><td>用户态 FUSE + gzip 解压</td><td>用户态 FUSE（v5）或 <strong>内核态 EROFS + fscache（v6）</strong></td></tr>
+    <tr><td>压缩</td><td>受限于 gzip</td><td>gzip / <strong>zstd</strong> 等</td></tr>
+    <tr><td>随机小文件 IO</td><td>一般</td><td>潜力更好（尤其 EROFS + fscache 路径，仍需按实际后端验证）</td></tr>
+    <tr><td>运行时依赖</td><td><code>stargz-snapshotter</code>（1 个进程）</td><td><code>nydus-snapshotter</code> + <code>nydusd</code>；fscache 需内核 ≥ 5.19</td></tr>
+    <tr><td>P2P 分发</td><td>无一等公民支持</td><td>与 Dragonfly 深度集成</td></tr>
+    <tr><td>完整性校验</td><td>ChunkDigest</td><td>chunk / bootstrap 摘要 + 可选 dm-verity</td></tr>
+    <tr><td>转换工具</td><td><code>nerdctl image convert --estargz</code></td><td><code>nydusify convert</code></td></tr>
+    <tr><td>改造成本</td><td><span class="good">低</span></td><td>中（多 daemon + 节点改造 + 格式转换）</td></tr>
+    <tr><td>能力上限</td><td>中</td><td><span class="good">高</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2><span class="n">07</span>实测数据：启动快，但重读更慢</h2>
+  <table class="num">
+    <tr>
+      <th>轮次</th><th>类型</th><th>① 拉取+启动</th><th>② shell→python</th><th>③ torch 导入</th>
+      <th>④ 首 step</th><th>⑤ 训练 200 步</th><th>⑥ 重点读 ~28 GB</th><th>⑦ 全量读 ~28 GB</th>
+    </tr>
+    <tr><td>1</td><td>oci</td><td>297,959</td><td>1,301</td><td>943</td><td>27</td><td>2,279</td><td>46,469</td><td>72,615</td></tr>
+    <tr class="ny-row"><td>1</td><td>nydus</td><td class="good">13,152</td><td class="bad">16,362</td><td>957</td><td>77</td><td>2,254</td><td class="bad">88,339</td><td class="bad">113,406</td></tr>
+    <tr><td>2</td><td>oci</td><td>296,660</td><td>1,266</td><td>950</td><td>28</td><td>2,379</td><td>41,913</td><td>20,557</td></tr>
+    <tr class="ny-row"><td>2</td><td>nydus</td><td class="good">13,134</td><td class="bad">17,655</td><td>985</td><td>95</td><td>2,515</td><td class="bad">96,162</td><td class="bad">54,548</td></tr>
+    <tr><td colspan="9" style="font-size:12.5px;color:var(--ink3);border:0;padding-top:6px;">单位 ms。② Started→PY_ENTER ③ PY_ENTER→TORCH ④ TORCH→首 step ⑤ 首 step→TRAIN_DONE ⑥⑦ 相对 START 的耗时</td></tr>
+  </table>
+  <div class="box key"><b>拉取 + 启动：298 s → 13 s，约 22×</b>
+    这是惰性拉取最直观的收益，且<strong>镜像越大优势越明显</strong>。
+  </div>
+  <div class="box warn"><b>但运行期首读明显变慢</b>
+    ② shell→python 从 1.3 s 涨到 16~18 s，⑥ 重点读 ~28 GB 从 42~46 s 涨到 88~96 s。<strong>原因是"没在 pull 阶段付的成本，挪到了首次 read 阶段付"</strong>——冷 blobcache 下每次 miss 都要 Range 回源 + 解压。缓存热起来后差距会收敛（对比轮次 2 的 ⑦：oci 20.5 s vs nydus 54.5 s，比轮次 1 都有下降）。
+  </div>
+  <p style="margin-top:14px;font-size:14.5px;">社区与厂商公开材料的定性结论（<strong>数字仅作量级参考，不要直接对外引用为我们的结果</strong>）：冷启动"分钟级降到秒级"；fscache 模式顺序/随机读接近 loop device、优于 FUSE；配合 Dragonfly P2P 生产网络延迟可降 80%+。</p>
+</section>
+
+<section>
+  <h2><span class="n">08</span>取舍小结</h2>
+  <div class="two">
+    <div class="cell es">
+      <h4>选 eStargz 的理由</h4>
+      <ul>
+        <li>零生态改造，产物就是标准 OCI 层</li>
+        <li>旧运行时自动退化，不会"上不去下不来"</li>
+        <li>只多一个进程，改造成本最低</li>
+      </ul>
+    </div>
+    <div class="cell ny">
+      <h4>选 Nydus 的理由</h4>
+      <ul>
+        <li>chunk 级去重，镜像多、层数多时优势明显</li>
+        <li>单挂载点，无 overlayfs 叠层与惊群问题</li>
+        <li>v6 内核态路径 + zstd + Dragonfly P2P</li>
+      </ul>
+    </div>
+  </div>
+  <div class="box info"><b>下一步</b>
+    在灰度节点上用我们自己的镜像实测：冷启动端到端时间、运行期首读放大倍数、blobcache 容量增长曲线，以及<strong>怎么从日志确认懒加载真的在生效、而不是静默回退到全量拉取</strong>。
+  </div>
+</section>
+
+<footer>
+  镜像加速技术选型 · 内部分享 · POC 阶段，结论未拍板<br>
+  参考：<a href="https://nydus.dev/">nydus.dev</a> ·
+  <a href="https://github.com/containerd/stargz-snapshotter/blob/main/docs/estargz.md">eStargz 格式规范</a> ·
+  <a href="https://www.alibabacloud.com/blog/faster-container-image-loading-speed-with-nydus-rafs-and-erofs_599012">RAFS v6 + EROFS + fscache 解析</a>
+</footer>
+
+</div>
+</body>
+</html>

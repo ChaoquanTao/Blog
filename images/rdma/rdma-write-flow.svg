@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 720" font-family="'PingFang SC','Microsoft YaHei','Noto Sans CJK SC','Helvetica Neue',Arial,sans-serif">
+  <defs>
+    <filter id="sh" x="-4%" y="-8%" width="108%" height="116%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.12"/>
+    </filter>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#455a64"/>
+    </marker>
+    <marker id="arB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1565c0"/>
+    </marker>
+    <marker id="arO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#f57c00"/>
+    </marker>
+    <marker id="arG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2e7d32"/>
+    </marker>
+  </defs>
+
+  <!-- 标题 -->
+  <text x="590" y="36" text-anchor="middle" font-size="25" font-weight="bold" fill="#263238">一次 RDMA WRITE 的完整生命周期</text>
+  <text x="590" y="63" text-anchor="middle" font-size="15" fill="#78909c">横轴为时间 · 灰色泳道全程未被触及</text>
+
+  <!-- ===== 泳道 ===== -->
+  <rect x="150" y="88" width="1010" height="72" rx="8" fill="#e8f1fb"/>
+  <rect x="20" y="88" width="124" height="72" rx="8" fill="#1565c0"/>
+  <text x="82" y="118" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff">本端 应用</text>
+  <text x="82" y="140" text-anchor="middle" font-size="12.5" fill="#bbdefb">用户态</text>
+
+  <rect x="150" y="168" width="1010" height="50" rx="8" fill="#eceff1" stroke="#b0bec5" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <rect x="20" y="168" width="124" height="50" rx="8" fill="#90a4ae"/>
+  <text x="82" y="199" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff">本端 内核</text>
+  <text x="172" y="199" font-size="14.5" font-weight="bold" fill="#78909c">Kernel Bypass —— 全程未参与</text>
+  <text x="948" y="199" text-anchor="middle" font-size="13.5" fill="#90a4ae">无系统调用 · 无中断 · 无内核缓冲</text>
+
+  <rect x="150" y="226" width="1010" height="72" rx="8" fill="#e6f4ea"/>
+  <rect x="20" y="226" width="124" height="72" rx="8" fill="#2e7d32"/>
+  <text x="82" y="256" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff">本端 HCA</text>
+  <text x="82" y="278" text-anchor="middle" font-size="12.5" fill="#c8e6c9">RDMA 网卡</text>
+
+  <rect x="150" y="306" width="1010" height="46" rx="8" fill="#fff4e0"/>
+  <rect x="20" y="306" width="124" height="46" rx="8" fill="#ef6c00"/>
+  <text x="82" y="335" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff">网络</text>
+
+  <rect x="150" y="360" width="1010" height="72" rx="8" fill="#e6f4ea"/>
+  <rect x="20" y="360" width="124" height="72" rx="8" fill="#2e7d32"/>
+  <text x="82" y="390" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff">对端 HCA</text>
+  <text x="82" y="412" text-anchor="middle" font-size="12.5" fill="#c8e6c9">RDMA 网卡</text>
+
+  <rect x="150" y="440" width="1010" height="50" rx="8" fill="#eceff1" stroke="#b0bec5" stroke-width="1.5" stroke-dasharray="7 5"/>
+  <rect x="20" y="440" width="124" height="50" rx="8" fill="#90a4ae"/>
+  <text x="82" y="471" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff">对端 内核</text>
+  <text x="172" y="471" font-size="14.5" font-weight="bold" fill="#78909c">同样未参与</text>
+
+  <rect x="150" y="498" width="1010" height="72" rx="8" fill="#f3f0f7"/>
+  <rect x="20" y="498" width="124" height="72" rx="8" fill="#6a1b9a"/>
+  <text x="82" y="528" text-anchor="middle" font-size="15" font-weight="bold" fill="#ffffff">对端 应用</text>
+  <text x="82" y="550" text-anchor="middle" font-size="12.5" fill="#e1bee7">用户态</text>
+
+  <!-- ===== 本端应用 ===== -->
+  <!-- 1 -->
+  <rect x="168" y="98" width="165" height="52" rx="8" fill="#ffffff" stroke="#1565c0" stroke-width="2" filter="url(#sh)"/>
+  <circle cx="187" cy="113" r="10" fill="#1565c0"/>
+  <text x="187" y="118" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">1</text>
+  <text x="203" y="118" font-size="13" font-weight="bold" fill="#1565c0">ibv_post_send()</text>
+  <text x="183" y="139" font-size="12" fill="#546e7a">往 SQ 写一条 WQE</text>
+
+  <!-- 2 -->
+  <rect x="348" y="98" width="165" height="52" rx="8" fill="#ffffff" stroke="#1565c0" stroke-width="2" filter="url(#sh)"/>
+  <circle cx="367" cy="113" r="10" fill="#1565c0"/>
+  <text x="367" y="118" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">2</text>
+  <text x="383" y="118" font-size="13" font-weight="bold" fill="#1565c0">敲 doorbell</text>
+  <text x="363" y="139" font-size="12" fill="#546e7a">写 MMIO 寄存器通知网卡</text>
+
+  <line x1="333" y1="124" x2="344" y2="124" stroke="#455a64" stroke-width="2" marker-end="url(#ar)"/>
+
+  <!-- 应用 buffer（DMA 源） -->
+  <rect x="660" y="98" width="165" height="52" rx="8" fill="#ffffff" stroke="#1565c0" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="742" y="119" text-anchor="middle" font-size="13" font-weight="bold" fill="#1565c0">应用 buffer</text>
+  <text x="742" y="139" text-anchor="middle" font-size="12" fill="#546e7a">已注册 MR · lkey</text>
+
+  <!-- 10 -->
+  <rect x="985" y="98" width="165" height="52" rx="8" fill="#ffffff" stroke="#1565c0" stroke-width="2" filter="url(#sh)"/>
+  <circle cx="1004" cy="113" r="10" fill="#1565c0"/>
+  <text x="1004" y="118" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">10</text>
+  <text x="1020" y="118" font-size="13" font-weight="bold" fill="#1565c0">ibv_poll_cq()</text>
+  <text x="1000" y="139" font-size="12" fill="#546e7a">轮询 CQ，确认完成</text>
+
+  <!-- ===== 本端 HCA ===== -->
+  <!-- 3 -->
+  <rect x="348" y="236" width="165" height="52" rx="8" fill="#ffffff" stroke="#2e7d32" stroke-width="2" filter="url(#sh)"/>
+  <circle cx="367" cy="251" r="10" fill="#2e7d32"/>
+  <text x="367" y="256" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">3</text>
+  <text x="383" y="256" font-size="13" font-weight="bold" fill="#2e7d32">DMA 取走 WQE</text>
+  <text x="363" y="277" font-size="12" fill="#546e7a">按 lkey 查物理地址</text>
+
+  <!-- 4 -->
+  <rect x="660" y="236" width="165" height="52" rx="8" fill="#ffffff" stroke="#2e7d32" stroke-width="2" filter="url(#sh)"/>
+  <circle cx="679" cy="251" r="10" fill="#2e7d32"/>
+  <text x="679" y="256" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">4</text>
+  <text x="695" y="256" font-size="13" font-weight="bold" fill="#2e7d32">DMA 直读源数据</text>
+  <text x="675" y="277" font-size="12" fill="#546e7a">不经内核缓冲</text>
+
+  <!-- 9 -->
+  <rect x="985" y="236" width="165" height="52" rx="8" fill="#ffffff" stroke="#2e7d32" stroke-width="2" filter="url(#sh)"/>
+  <circle cx="1004" cy="251" r="10" fill="#2e7d32"/>
+  <text x="1004" y="256" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">9</text>
+  <text x="1020" y="256" font-size="13" font-weight="bold" fill="#2e7d32">往 CQ 写 CQE</text>
+  <text x="1000" y="277" font-size="12" fill="#546e7a">生成完成事件</text>
+
+  <!-- 2 → 3：doorbell 竖直穿过内核泳道 -->
+  <line x1="430" y1="152" x2="430" y2="232" stroke="#1565c0" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arB)"/>
+
+  <!-- 3 → 4 -->
+  <line x1="513" y1="262" x2="656" y2="262" stroke="#455a64" stroke-width="2" marker-end="url(#ar)"/>
+
+  <!-- 4 上行 DMA：跨过内核泳道直读应用 buffer -->
+  <line x1="742" y1="232" x2="742" y2="154" stroke="#f57c00" stroke-width="2.5" marker-end="url(#arO)"/>
+  <rect x="845" y="245" width="130" height="34" rx="17" fill="#f57c00"/>
+  <text x="910" y="267" text-anchor="middle" font-size="13" font-weight="bold" fill="#ffffff">Zero Copy</text>
+  <line x1="843" y1="262" x2="829" y2="262" stroke="#f57c00" stroke-width="2" stroke-dasharray="4 3"/>
+
+  <!-- ===== 网络：5 ===== -->
+  <path d="M 742 292 L 742 329 L 927 329 L 927 356" fill="none" stroke="#ef6c00" stroke-width="2.5" marker-end="url(#arO)"/>
+  <rect x="766" y="313" width="190" height="32" rx="16" fill="#ef6c00"/>
+  <circle cx="784" cy="329" r="10" fill="#ffffff"/>
+  <text x="784" y="334" text-anchor="middle" font-size="12" font-weight="bold" fill="#ef6c00">5</text>
+  <text x="800" y="334" font-size="13" font-weight="bold" fill="#ffffff">IB / RoCE 封包发送</text>
+
+  <!-- ===== 对端 HCA：6 ===== -->
+  <rect x="845" y="370" width="165" height="52" rx="8" fill="#ffffff" stroke="#2e7d32" stroke-width="2" filter="url(#sh)"/>
+  <circle cx="864" cy="385" r="10" fill="#2e7d32"/>
+  <text x="864" y="390" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">6</text>
+  <text x="880" y="390" font-size="13" font-weight="bold" fill="#2e7d32">按 rkey 校验权限</text>
+  <text x="860" y="411" font-size="12" fill="#546e7a">查地址转换表</text>
+
+  <!-- ===== 对端应用：7 ===== -->
+  <rect x="845" y="508" width="165" height="52" rx="8" fill="#ffffff" stroke="#6a1b9a" stroke-width="2" filter="url(#sh)"/>
+  <circle cx="864" cy="523" r="10" fill="#6a1b9a"/>
+  <text x="864" y="528" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">7</text>
+  <text x="880" y="528" font-size="13" font-weight="bold" fill="#6a1b9a">目标 buffer 被写入</text>
+  <text x="860" y="549" font-size="12" fill="#546e7a">已注册 MR · rkey 指定</text>
+
+  <!-- 7 下行 DMA：跨过对端内核泳道 -->
+  <line x1="927" y1="426" x2="927" y2="504" stroke="#f57c00" stroke-width="2.5" marker-end="url(#arO)"/>
+  <rect x="560" y="448" width="272" height="34" rx="17" fill="#6a1b9a"/>
+  <text x="696" y="470" text-anchor="middle" font-size="13" font-weight="bold" fill="#ffffff">单边操作 · 对端 CPU 全程不知情</text>
+  <line x1="832" y1="465" x2="919" y2="465" stroke="#6a1b9a" stroke-width="2" stroke-dasharray="4 3"/>
+
+  <!-- ===== 8：硬件 ACK 回程 ===== -->
+  <path d="M 1010 396 L 1085 396 L 1085 292" fill="none" stroke="#2e7d32" stroke-width="2.5" marker-end="url(#arG)"/>
+  <rect x="1022" y="313" width="126" height="32" rx="16" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+  <circle cx="1040" cy="329" r="10" fill="#2e7d32"/>
+  <text x="1040" y="334" text-anchor="middle" font-size="12" font-weight="bold" fill="#ffffff">8</text>
+  <text x="1056" y="334" font-size="13" font-weight="bold" fill="#2e7d32">硬件 ACK</text>
+
+  <!-- 9 → 10 -->
+  <line x1="1067" y1="232" x2="1067" y2="154" stroke="#455a64" stroke-width="2" marker-end="url(#ar)"/>
+
+  <!-- ===== 底部结论 ===== -->
+  <rect x="150" y="596" width="1010" height="88" rx="12" fill="#fafafa" stroke="#cfd8dc" stroke-width="1.5"/>
+  <text x="180" y="626" font-size="15.5" font-weight="bold" fill="#37474f">对比传统 TCP，被整条抹掉的三笔开销：</text>
+
+  <circle cx="196" cy="655" r="6" fill="#f57c00"/>
+  <text x="210" y="660" font-size="14" fill="#455a64"><tspan font-weight="bold" fill="#f57c00">内存拷贝 0 次</tspan> —— 网卡直接 DMA 应用 buffer</text>
+
+  <circle cx="546" cy="655" r="6" fill="#1565c0"/>
+  <text x="560" y="660" font-size="14" fill="#455a64"><tspan font-weight="bold" fill="#1565c0">系统调用 0 次</tspan> —— 队列映射到用户态</text>
+
+  <circle cx="866" cy="655" r="6" fill="#6a1b9a"/>
+  <text x="880" y="660" font-size="14" fill="#455a64"><tspan font-weight="bold" fill="#6a1b9a">对端 CPU 0 参与</tspan> —— 无中断、无唤醒</text>
+</svg>

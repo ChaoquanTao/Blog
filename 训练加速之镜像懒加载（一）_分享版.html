@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>镜像懒加载（一）· eStargz</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --ink:#15181c; --ink2:#4a5058; --ink3:#8b929b;
+    --line:#e3e6ea; --accent:#1f618d; --accent-bg:#ecf3fb;
+    --warn:#a04000; --warn-bg:#fdf2e9; --ok:#196f3d; --ok-bg:#e9f7ef;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.65;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:860px;margin:0 auto;padding:0 20px 60px;}
+
+  header{background:linear-gradient(135deg,#1b3a57,#2a7ab0);color:#fff;padding:44px 20px 40px;margin-bottom:-28px;}
+  .hi{max-width:860px;margin:0 auto;}
+  h1{font-size:28px;margin:0 0 10px;font-weight:700;line-height:1.3;}
+  .sub{font-size:15px;opacity:.85;margin:0;}
+  .tags{margin-top:18px;display:flex;flex-wrap:wrap;gap:7px;}
+  .tag{font-size:12px;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.22);}
+
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:24px 28px;margin:16px 0;box-shadow:0 1px 2px rgba(16,24,40,.04);}
+  h2{font-size:19px;margin:0 0 16px;font-weight:700;display:flex;align-items:center;gap:10px;}
+  h2 .n{font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-bg);
+    border-radius:5px;padding:3px 8px;flex:none;}
+  ul{margin:0;padding-left:20px;color:var(--ink2);font-size:15.5px;}
+  li{margin:6px 0;}
+  li::marker{color:var(--ink3);}
+  strong{color:var(--ink);font-weight:650;}
+  code{font-family:"SF Mono",Menlo,Consolas,monospace;font-size:13px;
+    background:#eef1f4;color:#0b4f6c;padding:1.5px 6px;border-radius:4px;}
+  a{color:var(--accent);}
+  p{margin:0 0 12px;color:var(--ink2);font-size:15.5px;}
+
+  .stat{display:flex;align-items:center;gap:20px;background:var(--accent-bg);
+    border:1px solid #cfe0f0;border-radius:10px;padding:18px 22px;margin-bottom:16px;}
+  .stat .big{font-size:42px;font-weight:800;color:var(--accent);line-height:1;flex:none;}
+  .stat .t{font-size:15px;color:var(--ink2);}
+
+  .box{border-radius:9px;padding:13px 18px;margin:14px 0 0;font-size:15px;line-height:1.65;}
+  .box b{display:block;font-size:13px;letter-spacing:.03em;margin-bottom:3px;}
+  .box.key{background:var(--ok-bg);border:1px solid #c3e6d0;color:#14532d;} .box.key b{color:var(--ok);}
+  .box.warn{background:var(--warn-bg);border:1px solid #f2d3b3;color:#6b3410;} .box.warn b{color:var(--warn);}
+
+  pre{background:#1e222a;color:#d7dde5;border-radius:9px;padding:16px 18px;overflow-x:auto;
+    font-family:"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.6;margin:14px 0;}
+  pre .c{color:#7f8a99;} pre .k{color:#7fd1b9;}
+
+  figure{margin:16px 0 0;}
+  figure svg{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:9px;background:#fff;}
+  figcaption{font-size:13px;color:var(--ink3);text-align:center;margin-top:8px;}
+
+  table{width:100%;border-collapse:collapse;margin:14px 0 0;font-size:15px;}
+  th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;}
+  th{font-size:13px;color:var(--ink3);font-weight:650;background:#fafbfc;}
+  td:first-child{font-weight:600;color:var(--ink);white-space:nowrap;}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .cell{border:1px solid var(--line);border-radius:9px;padding:14px 16px;background:#fcfcfd;}
+  .cell h4{margin:0 0 5px;font-size:15px;font-weight:650;}
+  .cell p{margin:0;font-size:14px;line-height:1.6;}
+
+  footer{text-align:center;color:var(--ink3);font-size:13px;padding:28px 20px 0;}
+  @media(max-width:640px){
+    h1{font-size:23px;} section{padding:20px 18px;} .grid{grid-template-columns:1fr;}
+    .stat{flex-direction:column;align-items:flex-start;gap:8px;} .stat .big{font-size:34px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hi">
+    <h1>训练加速之镜像懒加载（一）：eStargz</h1>
+    <p class="sub">30 GB 训练镜像，启动真正读到的只有 ~2 GB。为什么不能只传这部分？</p>
+    <div class="tags">
+      <span class="tag">OCI</span><span class="tag">eStargz</span>
+      <span class="tag">containerd</span><span class="tag">Lazy Pulling</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section>
+  <h2><span class="n">01</span>问题</h2>
+  <div class="stat">
+    <div class="big">6.4%</div>
+    <div class="t">容器启动过程中平均只读取了镜像内容的 6.4%<br>
+      <span style="color:var(--ink3);font-size:13.5px;">— Slacker, USENIX FAST '16（威斯康辛大学 Harter 团队实测）</span></div>
+  </div>
+  <ul>
+    <li>30 GB 训练镜像 → 启动实际读到 <strong>~2 GB</strong></li>
+    <li>其余 28 GB：用不到的 GPU 架构 kernel、没 import 的算子、debug symbols、locale、文档</li>
+    <li>200 节点发版：制品库带宽打满、GPU 空转 90 分钟、每次蒸发 900 美元</li>
+  </ul>
+  <div class="box warn"><b>那为什么没人做按需加载？</b>OCI 镜像格式本身不允许。</div>
+</section>
+
+<section>
+  <h2><span class="n">02</span>卡在哪：tar.gz 天生反随机访问</h2>
+  <ul>
+    <li>OCI 规定每层 <code>mediaType = tar+gzip</code>，<code>digest</code> 对<strong>整层 blob</strong> 计算 → 层是分发和校验的最小单元</li>
+    <li>gzip 用 DEFLATE（滑动窗口 + Huffman），每字节解码依赖前文字典 → <strong>不能从中间开始解压</strong></li>
+    <li>后果：HTTP Range 拉不出可用数据，无论用不用，<strong>整层必须完整下载 + 完整解压</strong></li>
+  </ul>
+  <div class="box warn"><b>两条路</b>
+    ① 换掉 tar.gz，用天生可随机访问的新格式 → <strong>Nydus</strong>（下篇）<br>
+    ② 不换，让 tar.gz 变得可随机访问且保持格式合法 → <strong>eStargz</strong>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">03</span>eStargz：让 tar.gz 变 seekable</h2>
+  <p><strong>核心洞察：</strong>多个独立 gzip 流首尾拼接，本身仍是一个合法的 gzip 文件。<br>
+  → 把 tar 里<strong>每个文件单独 gzip</strong>，再拼起来，结果仍是合法 <code>.tar.gz</code>。</p>
+
+  <pre><span class="c">原版（不可 seek）</span>  gzip( [hdr_A][A][hdr_B][B][hdr_C][C] )
+                   └────── 一整个连续的 gzip 流 ──────┘
+
+<span class="c">eStargz（可 seek）</span> gzip([hdr_A][A]) ‖ gzip([hdr_B][B]) ‖ gzip([hdr_C][C]) ‖ gzip(TOC) ‖ footer</pre>
+
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 290" font-family="-apple-system,'PingFang SC',sans-serif">
+      <rect width="900" height="290" fill="#fff"/>
+      <text x="450" y="30" text-anchor="middle" font-size="14" fill="#8b929b">◀────── 整体仍是一个合法的 .tar.gz ──────▶</text>
+      <g stroke="#1f618d" stroke-width="1.6" fill="#ecf3fb">
+        <rect x="40" y="52" width="150" height="70" rx="6"/>
+        <rect x="190" y="52" width="150" height="70" rx="6"/>
+        <rect x="340" y="52" width="150" height="70" rx="6"/>
+        <rect x="490" y="52" width="80" height="70" rx="6" fill="#f5f6f8"/>
+      </g>
+      <rect x="570" y="52" width="190" height="70" rx="6" fill="#e9f7ef" stroke="#1e8449" stroke-width="1.6"/>
+      <rect x="760" y="52" width="100" height="70" rx="6" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="1.6"/>
+      <g font-size="13" fill="#15181c" text-anchor="middle">
+        <text x="115" y="82">gzip 流 1</text><text x="265" y="82">gzip 流 2</text>
+        <text x="415" y="82">gzip 流 3</text><text x="530" y="82" fill="#8b929b">...</text>
+        <text x="665" y="82" fill="#196f3d">gzip 流 N+1</text><text x="810" y="82" fill="#a04000">footer</text>
+      </g>
+      <g font-size="12" fill="#4a5058" text-anchor="middle" font-family="'SF Mono',Menlo,monospace">
+        <text x="115" y="104">[hdr_A][A]</text><text x="265" y="104">[hdr_B][B]</text>
+        <text x="415" y="104">[hdr_C][C]</text><text x="665" y="104">[hdr_TOC][TOC]</text>
+        <text x="810" y="104">51 字节</text>
+      </g>
+      <g font-size="11.5" fill="#8b929b" text-anchor="middle" font-family="'SF Mono',Menlo,monospace">
+        <text x="115" y="142">offset=0</text><text x="265" y="142">offset=87</text>
+        <text x="415" y="142">offset=177</text><text x="665" y="142">stargz.index.json</text>
+      </g>
+      <path d="M115 150 L115 182 M265 150 L265 182 M415 150 L415 182" stroke="#1f618d" stroke-width="1.4" fill="none" stroke-dasharray="4 3"/>
+      <path d="M115 182 L665 182 L665 150" stroke="#1f618d" stroke-width="1.4" fill="none" stroke-dasharray="4 3"/>
+      <text x="390" y="204" text-anchor="middle" font-size="13" fill="#1f618d">TOC 记录每个文件的 offset / size / sha256</text>
+      <path d="M810 150 L810 242 L680 242" stroke="#ca6f1e" stroke-width="1.4" fill="none" stroke-dasharray="4 3"/>
+      <text x="670" y="247" text-anchor="end" font-size="13" fill="#a04000">footer 记录 TOC 的偏移</text>
+    </svg>
+    <figcaption>eStargz layer 物理布局：拼接 gzip 流 + TOC 索引 + 固定 footer</figcaption>
+  </figure>
+
+  <ul style="margin-top:16px;">
+    <li>启动只需两次小请求：<code>Range: bytes=-51</code> 取 footer → 按偏移取 TOC（几十 KB）</li>
+    <li>之后按文件单独 Range 拉取、本地解压</li>
+  </ul>
+  <div class="box key"><b>为什么能落地</b>
+    对不知情的客户端完全透明（普通 pull 得到的还是原来的层）· <strong>制品库无需任何改造</strong>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">04</span>Prefetch：按需 ≠ 够快</h2>
+  <p>100 个启动期文件 × 30 ms 往返 = 3 秒<strong>串行阻塞</strong>。pull 秒完成，容器却要 5 秒才能服务。<br>
+  <strong>极致按需 = 极致往返次数</strong>，两者天然对抗。</p>
+
+  <pre>                     landmark
+                        ↓
+┌──────────────────┬────┬──────────────────────────────────┐
+│ 启动期文件       │ ✦  │ 其他文件（按需）                 │
+│ 物理上连续的区域 │    │ 真的用到了再单文件 Range 取      │
+└──────────────────┴────┴──────────────────────────────────┘
+↑──────────────────↑
+  prefetch zone：用<span class="k">一个大 Range 请求</span>整段拉下来</pre>
+
+  <ul>
+    <li>构建时 profiling（<code>ctr-remote optimize</code>）记录启动期访问的文件</li>
+    <li>重排 tar，把这些文件挪到最前面物理连续，中间插 <code>.prefetch.landmark</code> 标边界</li>
+    <li><strong>100 次往返 → 1 次大 Range 请求</strong></li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">05</span>运行时：Stargz Snapshotter</h2>
+  <p>containerd 的 snapshotter 插件，替换默认 overlayfs 的"下载 + 解压"动作：<strong>挂 FUSE 把 layer 虚拟成目录树</strong>，容器 <code>read()</code> 时拦截 → 查 TOC → HTTP Range 回源 → 解压 → 本地缓存。对容器进程完全透明。</p>
+
+  <figure>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="-apple-system, 'Segoe UI', 'PingFang SC', sans-serif">
+      <style>
+        .title{font-size:24px;font-weight:600;fill:#111;} .subtitle{font-size:16px;fill:#555;}
+        .zone{font-size:18px;font-weight:700;} .name{font-size:17px;font-weight:600;fill:#111;}
+        .lbl{font-size:14px;fill:#333;} .sml{font-size:13px;fill:#555;}
+        .mn{font-size:13px;fill:#444;font-family:'SF Mono',Menlo,Consolas,monospace;}
+        .comp{fill:#fff;stroke:#616a6b;stroke-width:1.5;}
+        .arw{fill:none;stroke:#1f618d;stroke-width:2.5;marker-end:url(#ah2);}
+        .arw2{fill:none;stroke:#1f618d;stroke-width:2.5;marker-end:url(#ah2);marker-start:url(#ahs2);}
+      </style>
+      <defs>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/></marker>
+        <marker id="ahs2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/></marker>
+      </defs>
+      <rect width="1200" height="760" fill="#fff"/>
+      <text x="600" y="44" text-anchor="middle" class="title">Stargz Snapshotter 运行时链路</text>
+      <text x="600" y="72" text-anchor="middle" class="subtitle">容器读文件 → FUSE 拦截 → 本地缓存命中，或跨网络按需回源</text>
+      <rect x="40" y="90" width="760" height="620" rx="14" fill="#ecf3fb" stroke="#2874a6" stroke-width="2"/>
+      <text x="64" y="122" class="zone" fill="#1a5276">K8s 节点</text>
+      <rect x="860" y="90" width="300" height="620" rx="14" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="2"/>
+      <text x="884" y="122" class="zone" fill="#a04000">远端（跨网络）</text>
+      <rect x="80" y="440" width="340" height="240" rx="12" fill="#e9f7ef" stroke="#1e8449" stroke-width="2" stroke-dasharray="8 5"/>
+      <text x="100" y="468" class="zone" fill="#196f3d">容器</text>
+      <rect x="120" y="140" width="180" height="56" rx="8" class="comp"/>
+      <text x="210" y="174" text-anchor="middle" class="name">kubelet</text>
+      <rect x="100" y="280" width="220" height="72" rx="8" class="comp"/>
+      <text x="210" y="308" text-anchor="middle" class="name">containerd</text>
+      <text x="210" y="334" text-anchor="middle" class="mn">proxy_plugin = "stargz"</text>
+      <rect x="460" y="270" width="280" height="92" rx="8" class="comp"/>
+      <text x="600" y="304" text-anchor="middle" class="name">stargz-snapshotter</text>
+      <text x="600" y="330" text-anchor="middle" class="mn">(containerd-stargz-grpc)</text>
+      <text x="600" y="352" text-anchor="middle" class="sml">查 TOC · 管缓存 · 回源</text>
+      <rect x="520" y="560" width="240" height="80" rx="8" class="comp"/>
+      <text x="640" y="592" text-anchor="middle" class="name">本地缓存（LRU）</text>
+      <text x="640" y="618" text-anchor="middle" class="mn" font-size="12">/var/lib/containerd-stargz-grpc</text>
+      <rect x="120" y="490" width="260" height="52" rx="8" class="comp"/>
+      <text x="250" y="522" text-anchor="middle" class="name">容器进程</text>
+      <rect x="120" y="580" width="260" height="72" rx="8" class="comp"/>
+      <text x="250" y="606" text-anchor="middle" class="name" font-size="16">rootfs（FUSE 虚拟目录树）</text>
+      <text x="250" y="632" text-anchor="middle" class="mn">/usr /lib /opt/model ...</text>
+      <rect x="890" y="250" width="240" height="190" rx="8" class="comp"/>
+      <text x="1010" y="286" text-anchor="middle" class="name">制品库</text>
+      <text x="1010" y="312" text-anchor="middle" class="sml">(Artifactory / Harbor …)</text>
+      <rect x="910" y="340" width="200" height="56" rx="6" fill="#fdf6ec" stroke="#ca6f1e" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text x="1010" y="372" text-anchor="middle" class="mn">eStargz layer (blob)</text>
+      <line x1="210" y1="196" x2="210" y2="278" class="arw"/>
+      <text x="224" y="242" class="lbl">① CRI（拉镜像 / 起容器）</text>
+      <line x1="322" y1="316" x2="458" y2="316" class="arw2"/>
+      <text x="390" y="300" text-anchor="middle" class="lbl">② snapshotter gRPC</text>
+      <text x="390" y="340" text-anchor="middle" class="sml">(Unix socket)</text>
+      <path d="M480 364 L480 616 L384 616" class="arw2"/>
+      <text x="494" y="520" class="lbl">③ FUSE mount</text>
+      <text x="494" y="542" class="sml">读请求被拦截、透传</text>
+      <line x1="250" y1="542" x2="250" y2="578" class="arw"/>
+      <text x="262" y="568" class="lbl">④ open() / read()</text>
+      <line x1="640" y1="364" x2="640" y2="558" class="arw2"/>
+      <text x="654" y="430" class="lbl">⑤ 查本地缓存</text>
+      <text x="654" y="452" class="sml">命中直接返回</text>
+      <line x1="742" y1="316" x2="888" y2="316" class="arw"/>
+      <text x="815" y="296" text-anchor="middle" class="lbl">⑥ 缓存未命中</text>
+      <text x="815" y="342" text-anchor="middle" class="lbl">HTTP Range 按需拉取</text>
+    </svg>
+  </figure>
+
+  <table>
+    <tr><th>方案</th><th>pull 阶段实际传输</th><th>耗时</th></tr>
+    <tr><td>传统 pull</td><td>整层 30 GB</td><td>~90 秒（3 Gbps）</td></tr>
+    <tr><td>Stargz Snapshotter</td><td>footer + TOC ≈ 几百 KB</td><td><strong>&lt; 100 ms</strong></td></tr>
+  </table>
+  <div class="box key"><b>端到端</b>从任务下发到容器就绪：<strong>分钟级 → 秒级</strong>。
+    <span style="font-size:13px;opacity:.8;">（走 containerd 生态：ctr / nerdctl / K8s；Docker 引擎默认 pull 不经过 snapshotter）</span>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">06</span>代价：没有银弹</h2>
+  <div class="grid">
+    <div class="cell"><h4>压缩率变差</h4>
+      <p>每文件各起一个 gzip 流，丢掉跨文件共享字典。<code>site-packages</code> 这类海量小 <code>.py</code> 膨胀最明显。</p></div>
+    <div class="cell"><h4>去重能力弱</h4>
+      <p>寻址单位仍是整层 blob。PyTorch 2.3/2.4 两个 3 GB CUDA 层内容 99% 重叠，也得存两份。</p></div>
+    <div class="cell"><h4>一层一个 FUSE 挂载</h4>
+      <p>28 层镜像 = 28 个挂载点，随「镜像数 × 层数」线性增长；每个都是独立故障单元，任一层挂 = 整个 rootfs unavailable。</p></div>
+    <div class="cell"><h4>resolve 超时静默回退</h4>
+      <p>每层 resolve 有<strong>硬编码 30 秒 timeout</strong>，超时后 containerd 静默退回全量拉取，<strong>收益直接清零</strong>。</p></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">07</span>什么时候不该用</h2>
+  <ul>
+    <li><strong>大部分文件都会被用到</strong> — 如 CI 构建镜像，没什么可"懒"的，FUSE 开销反而拖慢 IO</li>
+    <li><strong>模型权重占主体</strong> — 30 GB 里 25 GB 是 <code>.safetensors</code>，启动就要全量 load 到显存。<br>更好的方案：把权重从镜像剥出来，用模型服务或 blob storage 管</li>
+    <li><strong>制品库高可用没保障</strong> — 传统 pull 下载完就切断依赖；懒加载要求制品库 24/7 在线</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">08</span>小结</h2>
+  <ul>
+    <li>启动只读 6.4%，但 tar.gz 天生反随机访问</li>
+    <li>eStargz = 拼接 gzip 流 + TOC 索引，保持 OCI 兼容的前提下实现按需拉取</li>
+    <li>Prefetch 化解"按需"与"往返次数"的对抗；Stargz Snapshotter 把这套接进 containerd</li>
+    <li>但雕花终究是雕花：压缩率、去重、挂载点膨胀、超时回退</li>
+  </ul>
+  <div class="box key"><b>下一篇</b>
+    Nydus + Dragonfly 生产实践：控制面 / 数据面长什么样，一次 lazy pull 的完整启动流程，
+    以及<strong>怎么从日志判断懒加载真的在生效，而不是在静默回退</strong>。
+  </div>
+</section>
+
+<footer>
+  参考：<a href="https://www.usenix.org/system/files/conference/fast16/fast16-papers-harter.pdf">Slacker: Fast Distribution with Lazy Docker Containers · USENIX FAST '16</a>
+</footer>
+
+</div>
+</body>
+</html>

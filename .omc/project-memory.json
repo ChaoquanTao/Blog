@@ -64,6 +64,12 @@
   },
   "hotPaths": [
     {
+      "path": "20260731-容器里的RDMA：hostNetwork与SR-IOV的两条路.md",
+      "accessCount": 3,
+      "lastAccessed": 1785483619677,
+      "type": "file"
+    },
+    {
       "path": "20260604-工程实践：实现单机GPU-CPU混部.md",
       "accessCount": 1,
       "lastAccessed": 1784791970164,
