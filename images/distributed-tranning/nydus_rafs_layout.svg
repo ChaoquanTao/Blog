@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 680" font-family="-apple-system, 'Segoe UI', 'PingFang SC', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .zone  { font-size: 18px; font-weight: 700; }
+    .name  { font-size: 17px; font-weight: 600; fill: #111; }
+    .label { font-size: 14px; fill: #333; }
+    .small { font-size: 13px; fill: #555; }
+    .tiny  { font-size: 12px; fill: #666; }
+    .mono  { font-size: 13px; fill: #444; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    .mono2 { font-size: 12px; fill: #666; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    .comp  { fill: #ffffff; stroke: #616a6b; stroke-width: 1.5; }
+    .arrow { fill: none; stroke: #1f618d; stroke-width: 2.5; marker-end: url(#ah); }
+    .thin  { fill: none; stroke: #7f8c8d; stroke-width: 1.4; marker-end: url(#ag); }
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7f8c8d"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="680" fill="#ffffff"/>
+
+  <text x="600" y="40" text-anchor="middle" class="title">RAFS：把 N 层合并成一棵树 + 一堆去重后的块</text>
+  <text x="600" y="68" text-anchor="middle" class="subtitle">层的叠加与 whiteout 在构建期消解；文件内容切成内容寻址的 chunk，相同内容只存一份</text>
+
+  <!-- 左：源 OCI 镜像 -->
+  <rect x="40" y="92" width="330" height="520" rx="14" fill="#f4f6f7" stroke="#7f8c8d" stroke-width="2"/>
+  <text x="62" y="124" class="zone" fill="#5d6d7e">源 OCI 镜像</text>
+  <text x="350" y="124" text-anchor="end" class="tiny">上层覆盖下层 ↑</text>
+
+  <!-- L3 -->
+  <rect x="60" y="140" width="290" height="112" rx="8" class="comp"/>
+  <text x="78" y="167" class="name" font-size="15">L3</text>
+  <text x="78" y="196" class="mono">/usr/lib/libcudnn.so</text>
+  <text x="78" y="222" class="mono2" fill="#1a5276">内容与 L1 里那份完全相同</text>
+  <text x="78" y="242" class="mono2">（重新构建时被再打了一次）</text>
+
+  <!-- L2 -->
+  <rect x="60" y="278" width="290" height="112" rx="8" class="comp"/>
+  <text x="78" y="305" class="name" font-size="15">L2</text>
+  <text x="78" y="334" class="mono">/opt/model/a.bin</text>
+  <text x="78" y="360" class="mono" fill="#a04000">.wh.app.conf</text>
+  <text x="78" y="380" class="mono2" fill="#a04000">whiteout：删掉 L1 的 app.conf</text>
+
+  <!-- L1 -->
+  <rect x="60" y="416" width="290" height="112" rx="8" class="comp"/>
+  <text x="78" y="443" class="name" font-size="15">L1</text>
+  <text x="78" y="472" class="mono">/usr/lib/libcudnn.so</text>
+  <text x="78" y="498" class="mono">/etc/app.conf</text>
+
+  <text x="205" y="558" text-anchor="middle" class="small">层是叠加单位：覆盖、删除、重复</text>
+  <text x="205" y="580" text-anchor="middle" class="small">全都要留到运行时才解决</text>
+
+  <!-- 中间：转换 -->
+  <text x="410" y="300" text-anchor="middle" class="label">nydusify</text>
+  <text x="410" y="322" text-anchor="middle" class="label">convert</text>
+  <line x1="374" y1="348" x2="446" y2="348" class="arrow"/>
+
+  <!-- 右：Nydus 镜像 -->
+  <rect x="450" y="92" width="710" height="520" rx="14" fill="#ecf3fb" stroke="#2874a6" stroke-width="2"/>
+  <text x="472" y="124" class="zone" fill="#1a5276">Nydus 镜像</text>
+
+  <!-- bootstrap -->
+  <rect x="470" y="150" width="290" height="330" rx="8" class="comp"/>
+  <text x="615" y="181" text-anchor="middle" class="name">bootstrap</text>
+  <text x="615" y="203" text-anchor="middle" class="small">元数据，几 MB</text>
+  <line x1="490" y1="218" x2="740" y2="218" stroke="#d5dbdb" stroke-width="1.2"/>
+  <text x="615" y="240" text-anchor="middle" class="small">合并后的完整文件树</text>
+
+  <text x="490" y="272" class="mono">/usr/lib/libcudnn.so</text>
+  <text x="506" y="294" class="mono2" fill="#1a5276">└─ chunk c1 c2 c3</text>
+  <text x="490" y="326" class="mono">/opt/model/a.bin</text>
+  <text x="506" y="348" class="mono2" fill="#1a5276">└─ chunk c4 c5</text>
+  <text x="615" y="372" text-anchor="middle" class="mono2">chunk → (blob id, offset, 摘要)</text>
+
+  <rect x="486" y="386" width="258" height="76" rx="6" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="615" y="410" text-anchor="middle" class="small" fill="#a04000">/etc/app.conf 不在树里</text>
+  <text x="615" y="431" text-anchor="middle" class="tiny" fill="#a04000">whiteout 在构建期就消解了</text>
+  <text x="615" y="452" text-anchor="middle" class="tiny" fill="#a04000">运行时无需逐层查找</text>
+
+  <!-- chunk 引用箭头 -->
+  <line x1="762" y1="300" x2="836" y2="300" class="thin"/>
+  <text x="799" y="288" text-anchor="middle" class="tiny">引用</text>
+
+  <!-- blobs -->
+  <rect x="840" y="150" width="300" height="330" rx="8" class="comp"/>
+  <text x="990" y="181" text-anchor="middle" class="name">blobs</text>
+  <text x="990" y="203" text-anchor="middle" class="small">数据，切成定长 chunk</text>
+  <line x1="860" y1="218" x2="1120" y2="218" stroke="#d5dbdb" stroke-width="1.2"/>
+
+  <rect x="876" y="240" width="60" height="46" rx="6" fill="#eaf2f8" stroke="#2874a6" stroke-width="1.4"/>
+  <text x="906" y="269" text-anchor="middle" class="mono">c1</text>
+  <rect x="960" y="240" width="60" height="46" rx="6" fill="#eaf2f8" stroke="#2874a6" stroke-width="1.4"/>
+  <text x="990" y="269" text-anchor="middle" class="mono">c2</text>
+  <rect x="1044" y="240" width="60" height="46" rx="6" fill="#eaf2f8" stroke="#2874a6" stroke-width="1.4"/>
+  <text x="1074" y="269" text-anchor="middle" class="mono">c3</text>
+
+  <rect x="918" y="302" width="60" height="46" rx="6" fill="#ffffff" stroke="#616a6b" stroke-width="1.4"/>
+  <text x="948" y="331" text-anchor="middle" class="mono">c4</text>
+  <rect x="1002" y="302" width="60" height="46" rx="6" fill="#ffffff" stroke="#616a6b" stroke-width="1.4"/>
+  <text x="1032" y="331" text-anchor="middle" class="mono">c5</text>
+
+  <rect x="860" y="386" width="260" height="76" rx="6" fill="#eaf2f8" stroke="#2874a6" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="990" y="410" text-anchor="middle" class="small" fill="#1a5276">L3 与 L1 的 libcudnn.so 一致</text>
+  <text x="990" y="431" text-anchor="middle" class="tiny" fill="#1a5276">→ 复用 c1 c2 c3，blob 里不新建</text>
+  <text x="990" y="452" text-anchor="middle" class="tiny" fill="#1a5276">chunk 的身份由内容摘要决定</text>
+
+  <text x="805" y="520" text-anchor="middle" class="label">元数据与数据彻底分离：拉镜像只需要左边这几 MB，右边的块读到才取</text>
+  <text x="805" y="548" text-anchor="middle" class="small">每个 chunk 独立压缩（可用 zstd）· 可单独 Range 取回 · 各自带摘要可校验</text>
+  <text x="805" y="580" text-anchor="middle" class="small">这棵树只有一棵，和源镜像有多少层无关</text>
+</svg>

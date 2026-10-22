@@ -1,0 +1,409 @@
+<meta charset="utf-8">
+<!--
+  WeChat formatted article: 什么是 Agent 基础设施
+  主题色（深青主题）:
+    navy:       #0f172a
+    teal:       #0d9488
+    teal_light: #f0fdfa
+    teal_mid:   #5eead4
+    accent:     #ea580c
+-->
+<div style="max-width:100%;margin:0 auto;background:#ffffff;">
+
+  <!-- ===== Hero ===== -->
+  <div style="background:#0f172a;padding:52px 28px 44px;text-align:center;">
+    <div style="display:inline-block;font-size:11px;letter-spacing:0.12em;color:#5eead4;background:#12302f;border:1px solid #1f5f5a;padding:5px 16px;border-radius:20px;margin-bottom:22px;">AI INFRA · AGENT 平台</div>
+    <div style="height:10px;"></div>
+    <p style="font-family:'STSong','SimSun',serif;font-size:26px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">什么是 <span style="color:#5eead4;">Agent 基础设施</span></p>
+    <div style="width:36px;height:2px;background:#0d9488;margin:22px auto 0;"></div>
+  </div>
+
+  <!-- ===== 导语 ===== -->
+  <div style="padding:26px 22px 0;">
+    <div style="background:#f0fdfa;border-left:4px solid #0d9488;padding:16px 18px;margin:6px 0 8px;border-radius:0 6px 6px 0;">
+      <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#0d9488;margin:0 0 8px;">一句话定义</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">Agent 基础设施是让 AI Agent 从"能跑的 demo"变成"敢放进生产的系统"的那一层底座：它不让 Agent 更聪明，而是让 Agent <strong style="color:#0f766e;">可运行、可连接、可控制、可观测、可信任</strong>。</p>
+    </div>
+  </div>
+
+  <div style="padding:0 22px;">
+
+  <!-- ===== 00 引言 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#0d9488;background:#f0fdfa;border:1px solid #99e0d6;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">00</span>
+      </td>
+      <td valign="top" style="border:none;">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #0d9488;">引言：demo 和生产之间隔着一层看不见的东西</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">今天做一个 Agent demo 只需要一个下午：一段系统提示词、几个 MCP 工具、一个大模型 API Key。它能查日志、写代码、回答问题，效果往往令人惊艳。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">真正卡住团队的是下一步：</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;margin:0;line-height:1.7;"><strong style="color:#0f172a;">安全团队：</strong>它能不能删生产库？</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;margin:0;line-height:1.7;"><strong style="color:#0f172a;">财务：</strong>上个月花了多少 token？</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;margin:0;line-height:1.7;"><strong style="color:#0f172a;">业务方：</strong>昨天那个错误答案是怎么来的？</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:18px;">
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;margin:0;line-height:1.7;"><strong style="color:#0f172a;">平台团队：</strong>公司里到底跑着多少个 Agent？</p>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这些问题和模型能力无关，却每一个都能让项目停在试点阶段。安全、可观测性、韧性和治理，才是阻碍 Agent 从试点走向生产的主要障碍。回答这些问题的那一层，就是 Agent 基础设施。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">本文先讲清楚这个概念，再按层拆解它在工程上长什么样，最后看看开源生态中的代表性实现，以及它们如何串成一个 Agent 的完整生命周期。</p>
+
+  <!-- 分割线 -->
+  <div style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d9488;vertical-align:middle;margin:0 10px;"></span>
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  </div>
+
+  <!-- ===== 01 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#0d9488;background:#f0fdfa;border:1px solid #99e0d6;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">01</span>
+      </td>
+      <td valign="top" style="border:none;">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #0d9488;">什么是 Agent 基础设施</p>
+      </td>
+    </tr>
+  </table>
+
+  <div style="background:#f0fdfa;border:1px solid #b5e8e0;border-radius:8px;padding:18px 22px;margin:8px 0 22px;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#0f766e;line-height:1.85;margin:0;text-align:justify;">Agent 基础设施是位于大模型与 Agent 业务逻辑之下、负责运行、连接、授权、治理、观测和评估 Agent 的平台层。</p>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">用一个熟悉的类比最容易理解。上线一个 Web 应用，业务代码只是一小部分，你还需要：</p>
+
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 18px;margin:0 0 18px;">
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:2;margin:0;">
+      <span style="color:#0d9488;font-weight:700;">▸</span> <strong>Kubernetes</strong> 来运行和扩缩容<br>
+      <span style="color:#0d9488;font-weight:700;">▸</span> <strong>API 网关和服务网格</strong>来管理流量<br>
+      <span style="color:#0d9488;font-weight:700;">▸</span> <strong>IAM 和 RBAC</strong> 来控制谁能做什么<br>
+      <span style="color:#0d9488;font-weight:700;">▸</span> <strong>日志、监控、链路追踪</strong>来排查问题<br>
+      <span style="color:#0d9488;font-weight:700;">▸</span> <strong>镜像仓库</strong>管理版本，<strong>CI</strong> 保证质量
+    </p>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这一整套被称为云原生基础设施。开发者平时感觉不到它，但没有它，系统就上不了生产。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">Agent 基础设施是同样的思路，只是服务对象从"确定性的程序"换成了"会自主决策、会调用工具、行为不确定的 Agent"。</p>
+
+  <div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:32px;color:#0d9488;line-height:1;margin:0 0 6px;">"</p>
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">模型决定 Agent 的能力上限，基础设施决定企业敢不敢把它用起来。</p>
+  </div>
+
+  <!-- 分割线 -->
+  <div style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d9488;vertical-align:middle;margin:0 10px;"></span>
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  </div>
+
+  <!-- ===== 02 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#0d9488;background:#f0fdfa;border:1px solid #99e0d6;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">02</span>
+      </td>
+      <td valign="top" style="border:none;">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #0d9488;">为什么云原生那一套不够用</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 18px;text-align:justify;">既然已有成熟的云原生基础设施，为什么还要新的一层？因为 Agent 有五个传统应用没有的特性，每一个都会击穿现有工具的假设。</p>
+
+  <!-- 特性卡 1 -->
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:10px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;"><span style="color:#0d9488;">①</span> 行为不确定</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.6;">换模型、改提示词，行为就可能变</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:0 0 4px;line-height:1.6;"><span style="text-decoration:line-through;">旧假设：测试通过即可靠</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#0f766e;margin:0;line-height:1.6;font-weight:700;">→ 新需求：持续评估，而不只是一次性测试</p>
+  </div>
+  <!-- 特性卡 2 -->
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:10px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;"><span style="color:#0d9488;">②</span> 会主动行动</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.6;">自己决定调用哪些工具、按什么顺序</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:0 0 4px;line-height:1.6;"><span style="text-decoration:line-through;">旧假设：程序只执行写死的操作</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#0f766e;margin:0;line-height:1.6;font-weight:700;">→ 新需求：细到"哪个 Agent 能调哪个工具"的授权，高风险动作人工审批</p>
+  </div>
+  <!-- 特性卡 3 -->
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:10px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;"><span style="color:#0d9488;">③</span> 使用新协议</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.6;">MCP、A2A、LLM API：有状态、长会话、流式</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:0 0 4px;line-height:1.6;"><span style="text-decoration:line-through;">旧假设：一个请求对应一个后端</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#0f766e;margin:0;line-height:1.6;font-weight:700;">→ 新需求：理解 Agent 协议的专用网关</p>
+  </div>
+  <!-- 特性卡 4 -->
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:10px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;"><span style="color:#0d9488;">④</span> 按 token 计费，且代表某人行动</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:0 0 4px;line-height:1.6;"><span style="text-decoration:line-through;">旧假设：成本按机器算，身份按服务算</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#0f766e;margin:0;line-height:1.6;font-weight:700;">→ 新需求：按团队和用户的计量、预算与身份传递</p>
+  </div>
+  <!-- 特性卡 5 -->
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:22px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;"><span style="color:#0d9488;">⑤</span> 数量爆炸</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0 0 10px;line-height:1.6;">人人都在造 Agent、MCP Server、Skills</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;margin:0 0 4px;line-height:1.6;"><span style="text-decoration:line-through;">旧假设：服务目录变化缓慢</span></p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#0f766e;margin:0;line-height:1.6;font-weight:700;">→ 新需求：统一注册中心，防止"影子 AI"</p>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;"><strong style="color:#0f172a;">以协议为例。</strong>agentgateway 的文档指出，传统 API 网关是一个请求打到一个后端，而 MCP 需要把一个会话分发到多个 MCP Server，并且要应对协议规范不断演进带来的升级与回退。这不是给老网关加个插件就能解决的。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;"><strong style="color:#0f172a;">再以可靠性为例。</strong>不少团队用 Agent 排查 Kubernetes 部署和网络配置问题后发现：同一个 Agent 在不同模型、不同提示词下，可靠性差别很大。没有持续评估，就无法放心地迭代。</p>
+
+  <!-- 分割线 -->
+  <div style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d9488;vertical-align:middle;margin:0 10px;"></span>
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  </div>
+
+  <!-- ===== 03 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#0d9488;background:#f0fdfa;border:1px solid #99e0d6;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">03</span>
+      </td>
+      <td valign="top" style="border:none;">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #0d9488;">分层模型：Agent 基础设施的六层</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 18px;text-align:justify;">把上面的需求归类，Agent 基础设施可以拆成六层。它们位于业务 Agent 之下、模型与云原生底座之上，每一层回答一个上线前必须回答的问题。</p>
+
+  <!-- 分层图 -->
+  <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px 14px;margin:0 0 14px;">
+    <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 12px;">// Agent 基础设施分层模型 · 6 层及典型开源项目</p>
+
+    <div style="border:1px dashed #94a3b8;border-radius:6px;padding:9px 14px;margin-bottom:10px;text-align:center;">
+      <p style="font-size:13px;font-weight:700;color:#475569;margin:0;">业务 Agent</p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:10px 14px;margin-bottom:6px;">
+      <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 2px;">⑥ 评估 <span style="font-family:'Courier New',Courier,monospace;font-size:11px;font-weight:400;color:#7c3aed;background:#f5f3ff;padding:1px 6px;border-radius:3px;">agentevals</span></p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">它靠不靠谱？改动之后变好了还是变坏了？</p>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:10px 14px;margin-bottom:6px;">
+      <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 2px;">⑤ 可观测 <span style="font-family:'Courier New',Courier,monospace;font-size:11px;font-weight:400;color:#7c3aed;background:#f5f3ff;padding:1px 6px;border-radius:3px;">OpenTelemetry</span></p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">它刚才做了什么、花了多少、哪一步出错？</p>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:10px 14px;margin-bottom:6px;">
+      <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 2px;">④ 注册与治理 <span style="font-family:'Courier New',Courier,monospace;font-size:11px;font-weight:400;color:#7c3aed;background:#f5f3ff;padding:1px 6px;border-radius:3px;">agentregistry</span></p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">公司里有哪些 Agent 和工具？哪些被批准使用？</p>
+    </div>
+
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:10px 14px;margin:10px 0;">
+      <p style="font-size:14px;font-weight:700;color:#c2410c;margin:0 0 2px;">③ 身份与策略 <span style="font-size:11px;font-weight:400;color:#ea580c;">· 横跨运行时与网关</span></p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">谁能调用什么？Agent 代表谁在行动？</p>
+    </div>
+
+    <div style="background:#f0fdfa;border:1px solid #99e0d6;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:10px 14px;margin-bottom:6px;">
+      <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 2px;">② 连接与网关 <span style="font-family:'Courier New',Courier,monospace;font-size:11px;font-weight:400;color:#0f766e;background:#ccfbf1;padding:1px 6px;border-radius:3px;">agentgateway</span></p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">Agent 怎么安全地连到模型、工具和其他 Agent？</p>
+    </div>
+    <div style="background:#f0fdfa;border:1px solid #99e0d6;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:10px 14px;margin-bottom:10px;">
+      <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 2px;">① 运行时 <span style="font-family:'Courier New',Courier,monospace;font-size:11px;font-weight:400;color:#0f766e;background:#ccfbf1;padding:1px 6px;border-radius:3px;">kagent</span></p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">Agent 在哪里跑、怎么部署和扩缩容？</p>
+    </div>
+
+    <div style="background:#0f172a;border-radius:6px;padding:9px 14px;text-align:center;">
+      <p style="font-size:13px;font-weight:700;color:#ffffff;margin:0;">大模型 · 云原生底座（Kubernetes）</p>
+    </div>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">运行时和网关是地基，身份策略横跨两者；注册、可观测、评估则决定 Agent 能否被规模化地管理和信任。图中标签是各层的典型开源项目示例，可替换为任意同类方案。</p>
+
+  <!-- 分割线 -->
+  <div style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d9488;vertical-align:middle;margin:0 10px;"></span>
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  </div>
+
+  <!-- ===== 04 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#0d9488;background:#f0fdfa;border:1px solid #99e0d6;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">04</span>
+      </td>
+      <td valign="top" style="border:none;">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #0d9488;">开源生态中的代表性实现</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">近两年，云原生社区已经为每一层长出了专门的开源项目，不少已进入中立基金会。下面按层举例：重点是每一层要解决什么，项目只是参照。</p>
+
+  <!-- 4.1 运行时 -->
+  <p style="font-family:'STSong','SimSun',serif;font-size:17px;font-weight:700;color:#0f172a;line-height:1.5;margin:28px 0 12px;padding-left:10px;border-left:3px solid #0d9488;">运行时：把 Agent 当作一等资源</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">以 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0fdfa;color:#0f766e;padding:2px 6px;border-radius:4px;border:1px solid #b5e8e0;">kagent</span> 为例，它把 Agent、模型配置、MCP 工具都定义成 Kubernetes 自定义资源，用 YAML 声明、用 kubectl 管理。它由控制器、UI、执行引擎和 CLI 组成，内置 Kubernetes、Istio、Helm、Argo、Prometheus 等工具，是 CNCF sandbox 项目。云厂商的托管 Agent 平台是另一条路线：免运维，但与特定云绑定。</p>
+
+  <div style="background:#fff7ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+    <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">典型场景 · 值班排障</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">告警触发后，工程师在 Slack 里让 Agent 查看 Pod 事件、日志和内存曲线，Agent 建议调大 memory limit；由于修改 Deployment 是写操作，执行前需要人工批准。</p>
+  </div>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这一层的边界还在扩展：除了程序化和声明式 Agent，常驻型个人助手也开始被纳入统一受治理的运行时。</p>
+
+  <!-- 4.2 网关 -->
+  <p style="font-family:'STSong','SimSun',serif;font-size:17px;font-weight:700;color:#0f172a;line-height:1.5;margin:28px 0 12px;padding-left:10px;border-left:3px solid #0d9488;">连接与网关：理解 Agent 协议的数据面</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">以 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0fdfa;color:#0f766e;padding:2px 6px;border-radius:4px;border:1px solid #b5e8e0;">agentgateway</span> 为例，它用 Rust 编写，一个数据面同时处理 HTTP/gRPC 服务流量、LLM 调用、MCP 和 A2A，目前是 Agentic AI Foundation 项目。这一层通常解决三类问题：</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">MCP 治理</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">把多个 MCP Server 聚合到一个入口，按身份限定每个调用方能用哪些工具，对工具调用做审计和注入防护；还能把现有 REST API 通过 OpenAPI 直接暴露成 MCP 工具。</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">LLM 出口治理</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">统一接入多家模型，提供虚拟 Key、按团队的 token 预算和花费上限、故障切换。</p>
+  </div>
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d9488;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:18px;">
+    <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">A2A 路由</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">在不同框架的 Agent 之间转发调用，每一跳都带身份和追踪。</p>
+  </div>
+
+  <div style="background:#fff7ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+    <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">典型做法</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">把公司全部 LLM 流量经过网关，只允许经企业身份验证的员工访问模型，并按部门、按模型统计 token 用量。这些全部通过配置完成，后端 MCP Server 无需改动。</p>
+  </div>
+
+  <!-- 4.3 注册 -->
+  <p style="font-family:'STSong','SimSun',serif;font-size:17px;font-weight:700;color:#0f172a;line-height:1.5;margin:28px 0 12px;padding-left:10px;border-left:3px solid #0d9488;">注册与治理：企业内部的"Agent 应用商店"</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">以 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f0fdfa;color:#0f766e;padding:2px 6px;border-radius:4px;border:1px solid #b5e8e0;">agentregistry</span> 为例，它集中编目、发现和治理三类制品：Agent、MCP 工具和 Agent Skills，设计上参考了官方 MCP registry 的思路。</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">平台团队把审核过的故障排查 Agent、慢查询分析 Skill、内部 CMDB 的 MCP Server 发布上去；业务团队搜索、组合、一键部署，而不是去 GitHub 上随手找来路不明的 MCP Server。平台团队也因此能看清公司里跑着哪些 Agent、用了哪些工具。</p>
+
+  <!-- 4.4 评估 -->
+  <p style="font-family:'STSong','SimSun',serif;font-size:17px;font-weight:700;color:#0f172a;line-height:1.5;margin:28px 0 12px;padding-left:10px;border-left:3px solid #0d9488;">评估：把"靠不靠谱"变成可度量的指标</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这一层的代表包括 agentevals 等开源项目，以及 LangSmith、Langfuse 等评估与可观测平台。共同的思路是：</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin:18px 0;">
+    <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 10px;">// 评估闭环</p>
+    <p style="margin:0;line-height:2.4;">
+      <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#f0fdfa;color:#0f766e;border:1px solid #99e0d6;">追踪数据采集每次调用</span>
+      <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+      <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#f0fdfa;color:#0f766e;border:1px solid #99e0d6;">对照黄金评估集打分</span>
+      <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+      <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;">变更时告警</span>
+    </p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:10px 0 0;line-height:1.7;">常用评估器：轨迹匹配、LLM-as-judge；触发场景：换模型、加工具、改提示词。</p>
+  </div>
+
+  <div style="background:#fff7ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+    <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">典型场景 · 换模型</p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">团队想把运维 Agent 换成更便宜的模型，跑一遍黄金集后发现：多数用例表现一致，但网络策略类问题经常跳过关键排查步骤。于是只在简单问题上用便宜模型，复杂问题仍路由给强模型——而这个路由本身又可以交给网关层来做。</p>
+  </div>
+
+  <!-- 4.5 可观测 -->
+  <p style="font-family:'STSong','SimSun',serif;font-size:17px;font-weight:700;color:#0f172a;line-height:1.5;margin:28px 0 12px;padding-left:10px;border-left:3px solid #0d9488;">可观测性：复用而非重建</p>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">OpenTelemetry 已经成为这一层的事实标准。好的 Agent 基础设施组件都会直接输出追踪数据，接入团队现有的 Prometheus、Grafana、Jaeger 体系，而不是再造一套监控。</p>
+
+  <!-- 分割线 -->
+  <div style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d9488;vertical-align:middle;margin:0 10px;"></span>
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  </div>
+
+  <!-- ===== 05 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#0d9488;background:#f0fdfa;border:1px solid #99e0d6;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">05</span>
+      </td>
+      <td valign="top" style="border:none;">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #0d9488;">串起来：一个 Agent 的生命周期</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 18px;text-align:justify;">把六层放在一起看，Agent 的生命周期和传统软件的"编码、测试、推仓库、部署、网关治理、监控"几乎一一对应。以"平台团队为全公司提供一个集群诊断 Agent"为例：</p>
+
+  <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:0 0 18px;">
+    <div style="background:#f0fdfa;border:1px solid #99e0d6;border-radius:6px;padding:10px 14px;">
+      <p style="font-size:13px;font-weight:700;color:#0f766e;margin:0 0 2px;">① 构建</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">平台工程师在运行时中用声明式配置定义 Agent，绑定 Kubernetes 和 Prometheus 的 MCP 工具，以及几个排障 Skills。</p>
+    </div>
+    <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+    <div style="background:#f0fdfa;border:1px solid #99e0d6;border-radius:6px;padding:10px 14px;">
+      <p style="font-size:13px;font-weight:700;color:#0f766e;margin:0 0 2px;">② 评估</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">上线前跑黄金评估集，确认常见故障场景下的推理路径正确。</p>
+    </div>
+    <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+    <div style="background:#f0fdfa;border:1px solid #99e0d6;border-radius:6px;padding:10px 14px;">
+      <p style="font-size:13px;font-weight:700;color:#0f766e;margin:0 0 2px;">③ 发布</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">评估通过后发布到注册中心，标记为已批准，其他团队可以搜索和复用。</p>
+    </div>
+    <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+    <div style="background:#f0fdfa;border:1px solid #99e0d6;border-radius:6px;padding:10px 14px;">
+      <p style="font-size:13px;font-weight:700;color:#0f766e;margin:0 0 2px;">④ 运行</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">业务团队从注册中心拉取，部署到自己的集群，只授予只读 RBAC 权限。</p>
+    </div>
+    <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+    <div style="background:#f0fdfa;border:1px solid #99e0d6;border-radius:6px;padding:10px 14px;">
+      <p style="font-size:13px;font-weight:700;color:#0f766e;margin:0 0 2px;">⑤ 治理</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:0;line-height:1.6;">Agent 调用模型、工具和其他 Agent 的流量全部经过网关，统一认证、限流、计费和审计。</p>
+    </div>
+    <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+    <div style="background:#0f172a;border-radius:6px;padding:10px 14px;">
+      <p style="font-size:13px;font-weight:700;color:#5eead4;margin:0 0 2px;">⑥ 持续改进</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#cbd5e1;margin:0;line-height:1.6;">在线评估生产流量，质量下滑时告警，团队回到第 ① 步迭代。</p>
+    </div>
+  </div>
+
+  <div style="background:#f0fdfa;border:1px solid #b5e8e0;border-radius:8px;padding:18px 22px;margin:24px 0;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;font-weight:700;color:#0f766e;line-height:1.85;margin:0;text-align:justify;">这个闭环里，没有任何一步依赖模型"更聪明"，全部是工程问题。这正是 Agent 基础设施的价值所在。</p>
+  </div>
+
+  <!-- 分割线 -->
+  <div style="text-align:center;margin:32px 0;">
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d9488;vertical-align:middle;margin:0 10px;"></span>
+    <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  </div>
+
+  <!-- ===== 结语 ===== -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:36px 0 18px;border:none;border-collapse:collapse;table-layout:fixed;">
+    <tr>
+      <td width="46" valign="top" style="width:46px;padding-top:2px;border:none;white-space:nowrap;">
+        <span style="display:inline-block;font-size:11px;font-weight:500;color:#0d9488;background:#f0fdfa;border:1px solid #99e0d6;padding:4px 0;width:26px;border-radius:4px;text-align:center;white-space:nowrap;">06</span>
+      </td>
+      <td valign="top" style="border:none;">
+        <p style="font-family:'STSong','SimSun',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #0d9488;">结语</p>
+      </td>
+    </tr>
+  </table>
+
+  <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">十年前，容器让应用变得容易打包，但真正让企业放心上云的，是围绕容器长出来的 Kubernetes、服务网格、可观测性那一整套基础设施。今天的 Agent 正处在相似的位置：能力已经足够，缺的是让它在生产中可控、可审计、可信任的底座。</p>
+
+  <div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0 0;text-align:center;">
+    <p style="font-family:'STSong','SimSun',serif;font-size:16px;color:#cbd5e1;line-height:2;margin:0;">业界正在形成的共识是：<br>当 Agent 从实验走向规模化，<br>瓶颈会从"能力"转移到"治理"。<br><br><strong style="color:#5eead4;">理解运行时、连接、身份策略、注册治理、可观测、评估这六层，是设计企业 Agent 平台的起点。</strong></p>
+  </div>
+
+  <!-- ===== Footer ===== -->
+  <div style="margin-top:36px;padding-top:18px;border-top:1px solid #e2e8f0;padding-bottom:30px;">
+    <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.8;">AI Agent · Agent 基础设施 · MCP · A2A · kagent · agentgateway · 云原生</p>
+  </div>
+
+  </div>
+</div>

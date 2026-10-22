@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="-apple-system, 'Segoe UI', 'PingFang SC', sans-serif">
+  <style>
+    .title { font-size: 24px; font-weight: 600; fill: #111; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .zone  { font-size: 18px; font-weight: 700; }
+    .name  { font-size: 17px; font-weight: 600; fill: #111; }
+    .label { font-size: 14px; fill: #333; }
+    .small { font-size: 13px; fill: #555; }
+    .tiny  { font-size: 12px; fill: #666; }
+    .mono  { font-size: 13px; fill: #444; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    .mono2 { font-size: 12px; fill: #666; font-family: 'SF Mono', Menlo, Consolas, monospace; }
+    .comp  { fill: #ffffff; stroke: #616a6b; stroke-width: 1.5; }
+    .arrow { fill: none; stroke: #1f618d; stroke-width: 2.5; marker-end: url(#ah); }
+  </style>
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f618d"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="700" fill="#ffffff"/>
+
+  <text x="600" y="40" text-anchor="middle" class="title">去重粒度：从“整层”降到“数据块”</text>
+  <text x="600" y="68" text-anchor="middle" class="subtitle">同样两个共享 CUDA 底座的训练镜像，层模型要存两份，chunk 模型只存差异</text>
+
+  <!-- 左：层模型 -->
+  <rect x="40" y="92" width="400" height="568" rx="14" fill="#f4f6f7" stroke="#7f8c8d" stroke-width="2"/>
+  <text x="62" y="124" class="zone" fill="#5d6d7e">层模型（OCI / eStargz）</text>
+
+  <rect x="62" y="152" width="356" height="112" rx="8" class="comp"/>
+  <text x="240" y="181" text-anchor="middle" class="name" font-size="16">镜像 A · PyTorch 2.3</text>
+  <text x="240" y="209" text-anchor="middle" class="mono">CUDA 层　3 GB</text>
+  <text x="240" y="234" text-anchor="middle" class="mono2">digest a1b2c3…</text>
+
+  <rect x="62" y="290" width="356" height="112" rx="8" class="comp"/>
+  <text x="240" y="319" text-anchor="middle" class="name" font-size="16">镜像 B · PyTorch 2.4</text>
+  <text x="240" y="347" text-anchor="middle" class="mono">CUDA 层　3 GB</text>
+  <text x="240" y="372" text-anchor="middle" class="mono2">digest 9f3c7d…</text>
+
+  <rect x="62" y="428" width="356" height="104" rx="6" fill="#fdf2e9" stroke="#ca6f1e" stroke-width="1.2" stroke-dasharray="4 3"/>
+  <text x="240" y="456" text-anchor="middle" class="small" fill="#a04000">两层内容 99% 相同</text>
+  <text x="240" y="480" text-anchor="middle" class="tiny" fill="#a04000">但只要有 1 字节不同，digest 就不同</text>
+  <text x="240" y="504" text-anchor="middle" class="tiny" fill="#a04000">制品库与节点缓存只能视为两个独立对象</text>
+
+  <text x="240" y="578" text-anchor="middle" class="name" font-size="20">存储占用 ≈ 6 GB</text>
+  <text x="240" y="606" text-anchor="middle" class="small">相同的几百 MB 存了两遍</text>
+  <text x="240" y="632" text-anchor="middle" class="tiny">同一镜像内重复的文件，同样各存一份</text>
+
+  <!-- 右：chunk 模型 -->
+  <rect x="470" y="92" width="690" height="568" rx="14" fill="#ecf3fb" stroke="#2874a6" stroke-width="2"/>
+  <text x="492" y="124" class="zone" fill="#1a5276">chunk 模型（Nydus）</text>
+
+  <!-- band 1 -->
+  <rect x="492" y="148" width="646" height="124" rx="8" class="comp"/>
+  <text x="512" y="176" class="name" font-size="15">镜像 A 的 bootstrap</text>
+  <text x="1118" y="176" text-anchor="end" class="tiny" fill="#1a5276">4.1 镜像内去重 · 自动</text>
+  <text x="512" y="208" class="mono">/usr/lib/libcudnn.so    →  c1 c2 c3 c4</text>
+  <text x="512" y="234" class="mono">/opt/cuda/libcudnn.so   →  c1 c2 c3 c4</text>
+  <text x="512" y="258" class="tiny" fill="#1a5276">同一镜像里内容相同的文件，指向同一批 chunk，不重复写入</text>
+
+  <!-- band 2 -->
+  <rect x="492" y="296" width="646" height="124" rx="8" class="comp"/>
+  <text x="512" y="324" class="name" font-size="15">镜像 B 的 bootstrap（转换时指定 chunk-dict）</text>
+  <text x="1118" y="324" text-anchor="end" class="tiny" fill="#1a5276">4.2 跨镜像去重 · 需配置</text>
+  <text x="512" y="356" class="mono">/usr/lib/libcudnn.so    →  c1 c2 c3 c4</text>
+  <text x="900" y="356" class="mono2" fill="#1a5276">复用字典里已有的 chunk</text>
+  <text x="512" y="382" class="mono">/usr/lib/libtorch.so    →  d1 d2</text>
+  <text x="900" y="382" class="mono2" fill="#a04000">只有真正不同的才新增</text>
+  <text x="512" y="406" class="tiny" fill="#1a5276">参考镜像通常就是团队统一维护的基础镜像</text>
+
+  <!-- 汇聚箭头 -->
+  <line x1="815" y1="428" x2="815" y2="456" class="arrow"/>
+  <text x="835" y="448" class="tiny">两份 bootstrap 引用同一份存储</text>
+
+  <!-- band 3：chunk 池 -->
+  <rect x="492" y="460" width="646" height="120" rx="8" class="comp"/>
+  <text x="512" y="486" class="name" font-size="15">chunk 存储（制品库 / 节点 blobcache）</text>
+
+  <rect x="540" y="500" width="60" height="42" rx="6" fill="#eaf2f8" stroke="#2874a6" stroke-width="1.4"/>
+  <text x="570" y="527" text-anchor="middle" class="mono">c1</text>
+  <rect x="614" y="500" width="60" height="42" rx="6" fill="#eaf2f8" stroke="#2874a6" stroke-width="1.4"/>
+  <text x="644" y="527" text-anchor="middle" class="mono">c2</text>
+  <rect x="688" y="500" width="60" height="42" rx="6" fill="#eaf2f8" stroke="#2874a6" stroke-width="1.4"/>
+  <text x="718" y="527" text-anchor="middle" class="mono">c3</text>
+  <rect x="762" y="500" width="60" height="42" rx="6" fill="#eaf2f8" stroke="#2874a6" stroke-width="1.4"/>
+  <text x="792" y="527" text-anchor="middle" class="mono">c4</text>
+
+  <rect x="884" y="500" width="60" height="42" rx="6" fill="#ffffff" stroke="#616a6b" stroke-width="1.4"/>
+  <text x="914" y="527" text-anchor="middle" class="mono">d1</text>
+  <rect x="958" y="500" width="60" height="42" rx="6" fill="#ffffff" stroke="#616a6b" stroke-width="1.4"/>
+  <text x="988" y="527" text-anchor="middle" class="mono">d2</text>
+
+  <text x="666" y="566" text-anchor="middle" class="tiny" fill="#1a5276">A 与 B 共享</text>
+  <text x="951" y="566" text-anchor="middle" class="tiny">B 独有</text>
+
+  <text x="815" y="612" text-anchor="middle" class="name" font-size="20">存储占用 ≈ 3 GB + 差异部分</text>
+  <text x="815" y="640" text-anchor="middle" class="small">共享底座的镜像越多，省下的越接近线性放大</text>
+</svg>

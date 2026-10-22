@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "20260626-vLLM是怎么工作的.md",
+                "file": "20261020- 什么是 Agent 基础设施：从 Solo.io 的 Agentic AI 产品栈说起.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "20260626-vLLM是怎么工作的"
+              "title": "20261020- 什么是 Agent 基础设施：从 Solo.io 的 Agentic AI 产品栈说起"
             }
           },
           {
@@ -42,18 +42,20 @@
             "id": "b995b6084f0bf41f",
             "type": "leaf",
             "state": {
-              "type": "markdown",
+              "type": "canvas",
               "state": {
-                "file": "20260831-训练加速之镜像懒加载（二）.md",
-                "mode": "source",
-                "source": false
+                "file": "Untitled 1.canvas",
+                "viewState": {
+                  "x": 0,
+                  "y": 0,
+                  "zoom": 0
+                }
               },
-              "icon": "lucide-file",
-              "title": "20260831-训练加速之镜像懒加载（二）"
+              "icon": "lucide-layout-dashboard",
+              "title": "Untitled 1"
             }
           }
-        ],
-        "currentTab": 2
+        ]
       }
     ],
     "direction": "vertical"
@@ -112,7 +114,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 344.25390625
+    "width": 400.6953125
   },
   "right": {
     "id": "d35bbeb7d3459768",
@@ -217,35 +219,40 @@
       "bases:Create new base": false
     }
   },
-  "active": "b995b6084f0bf41f",
+  "active": "0b98efe9b25f9906",
   "lastOpenFiles": [
+    "什么是Agent基础设施_wechat.html",
+    "AGENTS.md",
+    "20260731-容器里的RDMA：hostNetwork与SR-IOV的两条路.md",
+    "20260626-vLLM是怎么工作的.md",
+    "Untitled.canvas",
+    "Untitled 1.canvas",
+    "20260831-训练加速之镜像懒加载（二）.md",
+    "训练加速之镜像懒加载（二）_wechat.html",
+    "nydus_dedup.png",
+    "nydus_rafs_layout.png",
+    "nydus_runtime_arch.png",
+    "images/distributed-tranning/nydus_dedup.svg",
+    "images/distributed-tranning/nydus_rafs_layout.svg",
     "分布式训练之镜像加速（二）.md",
     "images/distributed-tranning/nydus_runtime_arch.svg",
-    "20260831-训练加速之镜像懒加载（二）.md",
     "分布式训练之镜像加速-dragonfly.md",
     "20260720-训练加速之镜像懒加载（一）.md",
-    "20260731-容器里的RDMA：hostNetwork与SR-IOV的两条路.md",
     "images/rdma/rdma-write-flow.svg",
     "images/rdma",
     "镜像加速选型_eStargz-vs-Nydus.html",
     "训练加速之镜像懒加载（一）_分享版.html",
     "镜像底层原理.md",
-    "Untitled.canvas",
-    "20260626-vLLM是怎么工作的.md",
     "20260713-深入浅出GPU架构.md",
     "分布式训练之镜像加速（一）_wechat.html",
     "分布式训练之镜像加速（二）_wechat.html",
     "images/distributed-tranning/estargz_runtime_arch.svg",
     "images/gpu-arch/memory-hierarchy.svg",
     "images/gpu-arch/sm-structure.svg",
-    "images/gpu-arch/latency-hiding.svg",
-    "images/gpu-arch/cpu-vs-gpu-die.svg",
     "images/gpu-arch",
     "vLLM是怎么工作的_wechat.html",
     "20260622-level-trigger-or-edge-trigger.md",
     "vllm是怎么工作的.md",
-    "images/vllm-kvcache-growth.svg",
-    "images/vllm-prefill-decode.svg",
     "level-trigger-or-edge-trigger_wechat.html",
     "20260503-浅谈Go语言中的Channel.md",
     "20260622-k8s controller开发范式.md",
@@ -253,8 +260,6 @@
     "一次K8s升级引发的DevicePlugin注册失败_wechat.html",
     "20191010-一次由继承引发的思考.md",
     "k8s-controller-development-paradigm.md",
-    "messenger_social_v2.gif",
-    "本周科技要闻-20260620_wechat.html",
     "本周科技要闻-20260620.md",
     "20191015-https协议.md",
     "20190112-直面Java.md",
@@ -263,7 +268,6 @@
     "20191002-Spring的一点思考.md",
     "20191030-海量数据与空间限制面试题.md",
     "numa参考资料.md",
-    "从第一性原理理解NUMA.md",
-    "20260510-从第一性原理理解NUMA.md"
+    "从第一性原理理解NUMA.md"
   ]
 }

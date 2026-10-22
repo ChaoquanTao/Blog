@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>训练加速之镜像懒加载（二）</title></head>
+<body style="margin:0;padding:0;background:#ffffff;">
+<!-- 主题色：navy #0f172a / indigo #6366f1 / indigo_light #eef2ff / orange #ea580c / rose #f43f5e -->
+<div style="max-width:677px;margin:0 auto;background:#ffffff;">
+
+<!-- ===== Hero ===== -->
+<div style="background:#0f172a;padding:52px 28px 44px;text-align:center;">
+  <div style="display:inline-block;font-size:11px;letter-spacing:0.12em;color:#818cf8;background:#1e1b4b;border:1px solid #4338ca;padding:5px 16px;border-radius:20px;margin-bottom:22px;">镜像加速系列 · 第二篇</div>
+  <div style="height:10px;"></div>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:26px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">训练加速之<span style="color:#818cf8;">镜像懒加载</span>（二）</p>
+  <p style="font-size:13px;color:#8b95a5;letter-spacing:0.06em;margin:0;line-height:1.7;">Nydus 把压缩和寻址降到 chunk<br>把叠加升到整个镜像<br>以及为此付出的代价</p>
+  <div style="width:36px;height:2px;background:#6366f1;margin:22px auto 0;"></div>
+</div>
+
+<div style="padding:30px 20px 40px;">
+
+<!-- ===== 导语 ===== -->
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:0 0 26px;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">本文讲什么</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">上一篇讲了 eStargz——在 OCI 的旧格式里雕花，换来零生态改造。这一篇讲 Nydus：它重新设计了镜像格式，拿到了更彻底的能力，也背上了更重的运行时依赖。最后一节跳出技术，聊聊为什么 OCI 被吐槽十年仍是主流，以及同一项技术为什么在训练平台可有可无、在 serverless 却是生死线。</p>
+</div>
+
+<!-- ===== 01 ===== -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+  <tr>
+    <td width="46" valign="top" style="padding-top:2px;">
+      <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">01</span>
+    </td>
+    <td valign="top">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">在旧格式里雕花，要付出什么代价</p>
+    </td>
+  </tr>
+</table>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">上一篇讲到，eStargz 可以让镜像不必全部下载完就启动，从观测结果看，<span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#4338ca;padding:2px 6px;border-radius:4px;">pull</span> 时间几乎降到了零。但这并不是免费的：它有三笔绕不开的结构性代价——压缩率变差、去重能力弱、一层对应一个 FUSE 挂载点；此外，还有 resolve 超时后静默退回全量拉取的运行时风险。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这几个问题看似互不相关，根源却是同一个：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">压缩率变差</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">一层内部共用一个 gzip 字典。想让单个文件能被独立解压，就必须把这个字典拆掉。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">去重能力弱</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">层 blob 的 digest 就是寻址单位。两层只要差一个字节就是两个不同对象，制品库和本地缓存都没有更细的粒度可用。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:20px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">N 层 N 个挂载点</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">层是叠加单位。容器 rootfs 由 overlayfs 把每层 lowerdir 摞起来，镜像有多少层就得挂多少次。</p>
+</div>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">三个症状，一个病根：在 OCI 的世界里，“层（Layer）”同时承担了三份工作——压缩、寻址和叠加。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">可以把它想成一家仓库：货物按“整层”打包，仓库按“整层”编号，出库时还要按“整层”一层层摞起来。只要其中一个环节想改得更细，另外两个环节就会跟着受影响。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">eStargz 没有推翻这套模型，而是在层内部增加索引和可随机读取能力。好处是兼容性极佳：旧运行时不认识 eStargz，也能把它当成普通 OCI 镜像使用。代价是，它能优化到什么程度，仍然受“层”这个基本单位限制。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">上一篇把这条路线称为“在旧格式里雕花”。这不是贬义，而是一种清醒的工程取舍：少实现一部分高级功能，让现有工具尽量无须修改。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#1a1a2e;border-left:3px solid #6366f1;padding-left:16px;margin:0 0 18px;line-height:1.9;">但如果允许你把这三顶帽子摘下来重新分配呢？</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:32px;color:#6366f1;line-height:1;margin:0 0 6px;">“</p>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">这正是本文主角 Nydus 的思路：把压缩和寻址的单位从 layer 缩小到 chunk，把叠加的单位从 layer 放大到整个镜像。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这样一来，“层”仍然可以存在于镜像的构建和分发语义中，却不再主导运行时的数据读取。下面先拆开看它是怎么做到的，再算清楚为此付出的代价。</p>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===== 02 ===== -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+  <tr>
+    <td width="46" valign="top" style="padding-top:2px;">
+      <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">02</span>
+    </td>
+    <td valign="top">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">Nydus：把“目录”和“货物”分开</p>
+    </td>
+  </tr>
+</table>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">Nydus 是 <strong>CNCF Dragonfly 项目下的子项目</strong>，可以先把它拆成两部分：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">RAFS（Registry Acceleration File System）</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">一套专为镜像加速设计的只读文件系统格式。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:20px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">nydusd</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">一个根据文件访问请求，从远端按需取回数据的守护进程。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">如果把镜像比作一座仓库，RAFS 负责规定“目录怎么写、货物怎么分块摆放”，<span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#4338ca;padding:2px 6px;border-radius:4px;">nydusd</span> 则像仓库管理员：先拿到目录，等容器真正要用某件货物时，再去对应位置把那一块取回来。</p>
+
+<!-- 图 1 占位 -->
+<div style="border:1px dashed #94a3b8;border-radius:8px;padding:22px 18px;margin:22px 0;text-align:center;background:#f8fafc;">
+  <p style="font-size:12px;color:#64748b;margin:0 0 6px;letter-spacing:0.08em;">此处插入图片</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#4338ca;margin:0 0 6px;">nydus_runtime_arch.png</p>
+  <p style="font-size:12px;color:#94a3b8;margin:0;">Nydus 整体结构：构建期转换、启动控制面与运行期数据面</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">图中 <strong>①～④ 是控制面</strong>：containerd 把快照管理交给 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#4338ca;padding:2px 6px;border-radius:4px;">nydus-snapshotter</span>；snapshotter 落地 bootstrap、启动 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#4338ca;padding:2px 6px;border-radius:4px;">nydusd</span>；<span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#4338ca;padding:2px 6px;border-radius:4px;">nydusd</span> 挂载出整个镜像的只读视图；最后，overlayfs 在上面叠加一个可写层，再交给 runc。</p>
+
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">核心判断</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">这里最值得注意的是：lowerdir <strong>只有一个</strong>，与镜像原本有多少层无关。图中的 ⑤～⑦ 是数据面，只有当容器运行后真正读取文件时才会发生。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">两条启动路径对照着看：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 10px;">// 传统 OCI</p>
+  <p style="margin:0 0 16px;line-height:2.4;">
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;">逐层下载</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;">逐层解压落盘</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;">overlayfs 叠 rootfs</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#0f172a;color:#ffffff;">启动</span>
+  </p>
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 10px;">// Nydus</p>
+  <p style="margin:0;line-height:2.4;">
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid #c7d2fe;">拉 bootstrap（几 MB）</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#eef2ff;color:#6366f1;border:1px solid #c7d2fe;">挂载 RAFS</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#0f172a;color:#ffffff;">启动</span>
+    <span style="color:#94a3b8;font-size:14px;padding:0 4px;">→</span>
+    <span style="display:inline-block;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:bold;background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;">运行期按需取 chunk</span>
+  </p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">传统 OCI 把大量 I/O <strong>前置</strong>到启动阶段；Nydus 则把文件内容的下载<strong>延后</strong>到真正访问它的那一刻。</p>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">Nydus 并没有让网络变快，它只是让容器启动不再等待所有镜像数据下载完成。省下来的工作并未消失，只是被推迟了——到了第 06 节，这会变成一笔必须偿还的账。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===== 03 ===== -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+  <tr>
+    <td width="46" valign="top" style="padding-top:2px;">
+      <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">03</span>
+    </td>
+    <td valign="top">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">RAFS：一棵树 + 一堆块</p>
+    </td>
+  </tr>
+</table>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:0 0 20px;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">RAFS 的核心设计：把“文件在哪里”和“文件内容是什么”分开保存，而且目录描述的是整个镜像，而不是某一层。</p>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">bootstrap · 目录册</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">记录完整的文件系统结构，以及每个文件的数据在哪里。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:22px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">blobs · 货架</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">真正存放文件内容的地方，内容会被切成许多 chunk 保存。</p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">3.1　bootstrap：整个镜像只有一棵树</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">bootstrap 保存完整的文件系统元数据：目录结构、文件名、权限、属主、大小和时间戳。更关键的是，它还记录了<strong>一个文件由哪些 chunk 组成、每个 chunk 位于哪个 blob 的哪个偏移</strong>，并附带用于完整性校验的摘要。</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:32px;color:#6366f1;line-height:1;margin:0 0 6px;">“</p>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">bootstrap 中保存的，是所有镜像层合并之后的最终文件树。层与层之间的覆盖关系、whiteout（删除标记）和 opaque 目录，都已经在构建期处理完毕。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">对比传统 OCI：一个 28 层的镜像，运行时需要由 overlayfs 把 28 个目录依次叠起来。查找一个文件时，可能要从最上层一路向下寻找，直到命中，或者确认它已被 whiteout 删除。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">Nydus 把这项工作提前到了 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#4338ca;padding:2px 6px;border-radius:4px;">nydusify</span> 转换阶段。容器启动时拿到的已经是一棵合并完成、没有歧义的文件树。并不是运行时更擅长逐层查找，而是<strong>逐层合并这个问题，早在构建期就已经解决了</strong>。</p>
+
+<div style="background:#eef2ff;border-left:4px solid #6366f1;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#6366f1;margin:0 0 8px;">为什么 pull 近乎瞬时</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">bootstrap 通常只有几 MB 到几十 MB，而它描述的镜像可能有几十 GB。所谓“拉取 Nydus 镜像”，主要只是先下载这份目录册，而不是把仓库里的全部货物搬到本地。</p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">3.2　blobs：把文件切成可独立取回的小块</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">文件内容不再以“整层 tar 流”的形式保存，而是被切成定长 <strong>chunk</strong>（Native RAFS 常见大小为 1 MiB）。每个 chunk 都具备三个特征：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>独立压缩</strong>：解压这一块时，不需要先解压前面的内容。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>按内容寻址</strong>：身份由内容摘要决定，而不是由“属于哪一层、哪个文件”决定。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:20px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>可单独取回</strong>：知道偏移和长度，一次 HTTP Range 请求即可获取。</p></td>
+  </tr></table>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这里很容易与 eStargz 混淆。eStargz 同样会切分数据：通常每个文件对应一个 gzip 流，大文件还会继续按 4 MiB 切块。但它切分的主要目的是让运行时能够 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#4338ca;padding:2px 6px;border-radius:4px;">seek</span> 到某个位置；一个块仍然通过“某个 layer 中的某段偏移”来定位。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">Nydus 更进一步：chunk 是<strong>按内容寻址</strong>的。只要内容完全相同，无论它出现在哪个文件、哪一层，甚至哪个镜像里，都可以被识别为同一个 chunk。这正是后面实现细粒度去重的基础。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这种设计还带来一个额外好处：<strong>压缩算法不再被 tar.gz 格式限制。</strong>eStargz 为了保证产物整体仍是合法的 tar.gz，只能使用 gzip；RAFS 没有这层兼容包袱，可以选择 zstd 等算法。</p>
+
+<!-- 图 2 占位 -->
+<div style="border:1px dashed #94a3b8;border-radius:8px;padding:22px 18px;margin:22px 0;text-align:center;background:#f8fafc;">
+  <p style="font-size:12px;color:#64748b;margin:0 0 6px;letter-spacing:0.08em;">此处插入图片</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#4338ca;margin:0 0 6px;">nydus_rafs_layout.png</p>
+  <p style="font-size:12px;color:#94a3b8;margin:0;">RAFS 数据模型：层合并成一棵树，文件内容切成内容寻址的 chunk</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">图中有两条线索。一是<strong>左边三层合并成右边一棵树</strong>：whiteout 标记在构建期就被处理掉，被删除的文件不会出现在 bootstrap 里。二是<strong>相同内容只保留一份</strong>：L3 与 L1 中的 libcudnn.so 内容一致，转换时直接复用同一批 chunk。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">3.3　和 eStargz 摆在一起看</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 18px;margin:18px 0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.1em;margin:0 0 10px;">// eStargz：每层一个文件，索引在层内</p>
+  <p style="margin:0 0 6px;line-height:2.2;">
+    <span style="display:inline-block;padding:5px 10px;border-radius:5px;font-size:12px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;">layer 1</span>
+    <span style="color:#94a3b8;font-size:13px;padding:0 4px;">=</span>
+    <span style="display:inline-block;padding:5px 10px;border-radius:5px;font-size:12px;background:#ffffff;color:#64748b;border:1px solid #e2e8f0;">gzip(A) gzip(B) …</span>
+    <span style="display:inline-block;padding:5px 10px;border-radius:5px;font-size:12px;background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;">TOC</span>
+  </p>
+  <p style="margin:0 0 6px;line-height:2.2;">
+    <span style="display:inline-block;padding:5px 10px;border-radius:5px;font-size:12px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;">layer 2</span>
+    <span style="color:#94a3b8;font-size:13px;padding:0 4px;">=</span>
+    <span style="display:inline-block;padding:5px 10px;border-radius:5px;font-size:12px;background:#ffffff;color:#64748b;border:1px solid #e2e8f0;">gzip(D) gzip(E) …</span>
+    <span style="display:inline-block;padding:5px 10px;border-radius:5px;font-size:12px;background:#fff7ed;color:#ea580c;border:1px solid #fed7aa;">TOC</span>
+  </p>
+  <p style="font-size:12px;color:#94a3b8;margin:10px 0 0;line-height:1.7;">↑ 每层各有一份索引，只认识自己层内的文件</p>
+</div>
+
+<div style="background:#ffffff;border:1px solid #c7d2fe;border-radius:8px;padding:16px 18px;margin:18px 0;">
+  <p style="font-size:11px;color:#818cf8;letter-spacing:0.1em;margin:0 0 10px;">// RAFS：一份镜像级索引 + 一堆内容寻址的块</p>
+  <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 2px;">bootstrap（几 MB）</p>
+    <p style="font-size:12px;color:#64748b;margin:0;line-height:1.7;">合并后的完整文件树（whiteout 已消解）<br>文件 → chunk 列表<br>chunk → (blob id, offset, 压缩长度, 摘要)</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓ 引用</p>
+  <p style="margin:0;line-height:2.2;text-align:center;">
+    <span style="display:inline-block;padding:5px 12px;border-radius:5px;font-size:12px;background:#ffffff;color:#475569;border:1px solid #cbd5e1;">blob 1</span>
+    <span style="display:inline-block;padding:5px 12px;border-radius:5px;font-size:12px;background:#ffffff;color:#475569;border:1px solid #cbd5e1;">blob 2</span>
+    <span style="display:inline-block;padding:5px 12px;border-radius:5px;font-size:12px;background:#ffffff;color:#475569;border:1px solid #cbd5e1;">blob 3</span>
+  </p>
+  <p style="font-size:12px;color:#94a3b8;margin:10px 0 0;line-height:1.7;">定长 chunk · 内容寻址 · 各自独立压缩 · 可单独 Range 取回</p>
+</div>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">TOC 只知道某一层里有什么，bootstrap 则知道整个镜像最终长什么样。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">后面谈到的所有差异——能否跨层去重、rootfs 需要几个挂载点、缓存按什么粒度复用——都可以追溯到这里。</p>
+
+<div style="background:#fff3ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">工程细节 · RAFS 的两条挂载形态</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0 0 10px;color:#334155;text-align:justify;">RAFS v5 使用私有元数据格式，只能由 nydusd 在用户态解析，因此需要经过 FUSE。RAFS v6 的元数据布局与内核中的 EROFS 兼容，可由内核直接解析；本地没有所需数据时，再通过 fscache 从远端读取。缓存中已有数据时，请求不必反复穿越用户态，随机读取小文件所经过的步骤会明显减少。</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">代价是，使用 fscache 要求<strong>内核版本不低于 5.19</strong>；旧内核只能退回 FUSE 模式。这个版本要求会在第 06 节再次出现。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===== 04 ===== -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+  <tr>
+    <td width="46" valign="top" style="padding-top:2px;">
+      <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">04</span>
+    </td>
+    <td valign="top">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">去重：把上一篇那个 3 GB 的例子算完</p>
+    </td>
+  </tr>
+</table>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">假设团队同时维护 PyTorch 2.3 和 2.4 两个训练镜像。它们各有一个 3 GB 的 CUDA 层，内容有 99% 相同。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">在 eStargz 和标准 OCI 的模型里，只要两个层有一个字节不同，最终 digest 就不同。制品库和节点缓存只能把它们视为两个独立对象，结果就是：<strong>两个 3 GB 的层都要完整保存</strong>，即使其中几百 MB 的 libcudnn.so 一模一样。更进一步，即使重复内容出现在<strong>同一个镜像的不同层</strong>里，层模型也无法自动识别。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">而 Nydus 以内容摘要标识 chunk，去重的粒度从“整层”缩小到了“数据块”，答案因此发生了变化。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">4.1　镜像内去重：自动的</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">nydusify 转换镜像时，内容相同的 chunk 只需保存一份；bootstrap 中的多个文件位置可以共同引用它。这种镜像内部的去重不需要额外配置。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">训练镜像中的重复内容往往比想象中更多：多阶段构建遗留的重复依赖、被 pip install 到不同虚拟环境中的同一批 wheel、在多个层中反复复制的模型配置文件……在层模型中，它们是“不同层里的不同副本”；在 chunk 模型中，相同部分可以指向同一份数据。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">4.2　跨镜像去重：要配</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">跨镜像共享则不是自动获得的，它依赖 <strong>chunk-dict</strong>。转换新镜像时，需要指定一个参考镜像——通常是团队统一维护的基础镜像。nydusify 会优先复用字典中已经存在的 chunk，只有找不到时才写入新数据。</p>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">使用相同基础环境的镜像越多，节省的空间和网络流量越多。如果 10 个训练镜像都使用同一套 CUDA / cuDNN，理想情况下就不必另外保存和下载 9 份相同的 chunk。</p>
+</div>
+
+<!-- 图 3 占位 -->
+<div style="border:1px dashed #94a3b8;border-radius:8px;padding:22px 18px;margin:22px 0;text-align:center;background:#f8fafc;">
+  <p style="font-size:12px;color:#64748b;margin:0 0 6px;letter-spacing:0.08em;">此处插入图片</p>
+  <p style="font-family:'Courier New',Courier,monospace;font-size:13px;color:#4338ca;margin:0 0 6px;">nydus_dedup.png</p>
+  <p style="font-size:12px;color:#94a3b8;margin:0;">去重粒度对比：层模型存两份，chunk 模型只存共享数据加差异</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">左边是层模型：两个 CUDA 层内容 99% 相同，但 digest 不同，于是各存一份。右边是 chunk 模型：镜像 A 内部两个内容相同的文件指向同一批 chunk，这一步不需要配置；镜像 B 转换时带上 chunk-dict，libcudnn.so 直接复用 A 已有的 c1–c4，只有真正不同的 libtorch.so 才写入新的 d1、d2。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">内容寻址也顺带提供了完整性校验的基础：每个 chunk 都有摘要，bootstrap 自身也有摘要，取回数据后可以逐块验证；在 RAFS v6 的 EROFS 路径上，特定部署形态（例如机密容器场景）还可以叠加 dm-verity 做块级校验。<strong>去重与校验看似是两种能力，底层依赖的却是同一件事：内容本身就是身份。</strong></p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">4.3　但这里有个诚实的边界</p>
+
+<div style="background:#fff3ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">前置条件不在 Nydus</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">chunk 能否复用，取决于两次构建生成的字节是否完全一致。如果各团队各自维护基础镜像、基础镜像使用 latest、pip install 不锁版本，或者编译产物中混入时间戳和构建路径，那么两个“看起来一样”的 CUDA 层，实际字节可能并不相同，chunk-dict 的命中比例也会很低。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">因此，想真正获得跨镜像去重收益，前置条件在构建流水线：统一基础镜像、锁定依赖版本，并尽量实现可复现构建。<strong>这件事的难度经常被低估——它不只是安装一个组件，还意味着要改变整个团队构建镜像的习惯。</strong></p>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===== 05 ===== -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+  <tr>
+    <td width="46" valign="top" style="padding-top:2px;">
+      <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">05</span>
+    </td>
+    <td valign="top">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">数据面：容器跑起来之后</p>
+    </td>
+  </tr>
+</table>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">容器已经成功启动。但此时本地磁盘上除了几 MB 的 bootstrap，几乎没有真正的文件数据：大部分内容仍在远端。接下来，容器每一次读取尚未缓存的文件，才会触发真正的按需加载。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">5.1　一次 read 的完整旅程</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:18px 0;">
+  <div style="background:#e9f7ef;border:1px solid #a9dfbf;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#16a34a;margin:0 0 2px;">① 容器进程 read()</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">overlayfs：upperdir 没有，落到 lowerdir</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#6366f1;margin:0 0 2px;">② RAFS 挂载点</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">FUSE，或 v6 的 EROFS / fscache 路径</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#16a34a;margin:0 0 2px;">③ 页缓存 / blobcache 命中</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">直接返回，或解压后返回 —— 到此结束</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓ 都没命中</p>
+  <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#ea580c;margin:0 0 2px;">④ 查 bootstrap 定位 chunk</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">这个偏移落在哪个 chunk</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+    <p style="font-size:13px;font-weight:700;color:#ea580c;margin:0 0 2px;">⑤ Range GET 取回 chunk</p>
+    <p style="font-size:12px;color:#64748b;margin:0;">可合并相邻 chunk → 校验摘要 → 解压</p>
+  </div>
+  <p style="text-align:center;color:#94a3b8;font-size:14px;margin:3px 0;">↓</p>
+  <div style="background:#0f172a;border-radius:6px;padding:10px 14px;text-align:center;">
+    <p style="font-size:13px;font-weight:700;color:#ffffff;margin:0;">⑥ 写入 blobcache + 页缓存 → 返回</p>
+  </div>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">5.2　为什么“合并相邻 chunk”很重要</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">懒加载有一个天然矛盾：<strong>读取越精确，网络请求往往越零碎。</strong>极端情况下，串行读取 100 个小文件，可能意味着 100 次网络往返。即使实际下载的数据量不大，累计延迟也可能很可观。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">Nydus 的 chunk 大小固定，并在 blob 中连续排布，这使合并请求更加容易。当 nydusd 发现多个待读取的 chunk 在物理位置上相邻时，可以把它们<strong>合并到一个 Range 请求中</strong>一次取回。顺序读取大文件时，还可以提前读取后续 chunk。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">eStargz 每次从远端读取的，通常是“某个文件对应的 gzip 数据段”。不同文件在物理上是否相邻，取决于 tar 中的排列顺序，运行时很难按固定大小合并请求。</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #ea580c;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">eStargz：物理重排</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">构建时先记录一次启动过程中访问了哪些文件，再把这些文件移动到 tar 流前部；运行时用一个大 Range 请求取回整段。文件顺序会固定在镜像中，因此记录结果是否准确非常关键。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #6366f1;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:20px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">Nydus：元数据指示</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">bootstrap 可以携带预取表，在转换时指定要预取的目录或路径模式。nydusd 启动后用独立线程在后台批量拉取。数据布局无须随预取策略一起调整，策略更容易修改。</p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#4338ca;margin:26px 0 12px;">5.3　和 eStargz 的关键差异</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;">
+  <tr>
+    <td style="padding:10px 13px;background:#0f172a;color:#cbd5e1;font-weight:500;font-size:13px;">维度</td>
+    <td style="padding:10px 13px;background:#0f172a;color:#cbd5e1;font-weight:500;font-size:13px;">eStargz</td>
+    <td style="padding:10px 13px;background:#0f172a;color:#cbd5e1;font-weight:500;font-size:13px;">Nydus</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:13px;">挂载模型</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:13px;">N 层 → N 个 FUSE 挂载</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:13px;">一个合并挂载，与层数无关</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:13px;">远端读取单位</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:13px;">某文件的一段 gzip 流</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:13px;">chunk，可合并相邻块</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:13px;">解压与命中路径</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:13px;">用户态 FUSE + gzip</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:13px;">FUSE（v5）或内核态 EROFS + fscache（v6）；zstd</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:13px;">缓存定位</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:13px;">按 layer blob 的字节范围</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:13px;">按 chunk（内容寻址）</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:13px;">内容复用</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:13px;">仅整层 blob 级</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:13px;">chunk 级，跨镜像靠 chunk-dict</td>
+  </tr>
+  <tr>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:13px;">未访问的数据</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:13px;">永不下载</td>
+    <td style="padding:10px 13px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:13px;">永不下载</td>
+  </tr>
+</table>
+
+<div style="background:#fff3ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">表里藏着的共同风险</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">每一次缓存未命中，都可能把一次普通文件读取变成一次网络读取。数据面设计得越精细，运行期就越依赖缓存、网络和远端后端。下一节要算的，正是这笔账。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===== 06 ===== -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+  <tr>
+    <td width="46" valign="top" style="padding-top:2px;">
+      <span style="display:inline-block;font-size:11px;font-weight:500;color:#f43f5e;background:#fff1f2;border:1px solid #fecdd3;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">06</span>
+    </td>
+    <td valign="top">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #f43f5e;">代价：省下的时间，最终要在哪里偿还</p>
+    </td>
+  </tr>
+</table>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:0 0 20px;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:32px;color:#f43f5e;line-height:1;margin:0 0 6px;">“</p>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">Nydus 的代价可以概括为：启动时没有完成的工作，需要在运行时继续完成。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">传统 pull 像一次性付清：先完成下载、解压并占用磁盘，容器启动后，读取镜像文件通常不再依赖制品库。Nydus 更像分期付款：启动时只下载几 MB 的 bootstrap，相当于付了首付；剩余成本则在运行期间，随着一次次缓存 miss 陆续偿还。下面这些看似不同的问题，本质上都是同一件事的连锁反应。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#be123c;margin:26px 0 12px;">6.1　首读放大：钱没消失，只是挪了位置</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">先看一组我们在概念验证阶段观察到的趋势。具体数据和镜像信息不便公开，这里只保留倍数关系；实际结果会受镜像、网络和后端影响，仍需先在少量测试节点上重新测量：</p>
+
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">✓ 拉取 + 启动</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">Nydus 比原生 OCI 快约<strong>一个数量级</strong>，镜像越大，优势通常越明显。</p>
+</div>
+<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">✗ 冷 blobcache 下的密集首读</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">如果把镜像中的几十 GB 数据完整读取一遍，Nydus 反而可能<strong>慢约一倍</strong>。</p>
+</div>
+<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:20px;">
+  <p style="font-size:12px;font-weight:700;color:#475569;margin:0 0 6px;">≈ 缓存热起来之后</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">两者差距明显收敛。需要说明的是，上一条是刻意构造的全量顺序读；典型训练任务只会读到镜像中的一小部分，实际差距通常远小于此。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">第二条看似反常，原因却很直接：<strong>pull 阶段没有完成的工作，被转移到了 read 阶段。</strong>每次缓存中没有所需数据，都可能需要通过 Range 请求从远端下载、校验摘要、解压，并写入 blobcache。原生 OCI 通常按层顺序、批量地完成下载和解压；懒加载则可能在应用读取过程中，以更随机、更零散、夹杂网络往返的方式补齐数据。总工作量没有凭空消失，执行方式反而可能更昂贵。</p>
+
+<div style="background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#4338ca;line-height:1.85;margin:0;text-align:justify;">如果任务一启动就会读遍整个镜像，懒加载的大部分收益都会被抵消。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">例如，一个推理服务启动后立刻要把 25 GB 权重全部加载到显存，这 25 GB 无论如何都必须读取，“懒”不起来。训练任务也要看具体行为：如果进入第一个 step 之前就必须扫描数据集并加载全部权重，那么只是把等待从 Kubernetes 的 Pulling 阶段挪到了应用初始化阶段，端到端时间未必会缩短。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#be123c;margin:26px 0 12px;">6.2　运行时依赖变重</p>
+
+<div style="background:#fff3ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">反直觉的生命周期</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">在“每容器一个 daemon”的模式下，nydusd 的生命周期绑定的是容器的 active snapshot，而不是镜像本身。容器执行 Prepare 时它被创建，执行 Remove 时才被销毁。（nydus-snapshotter 也支持 shared daemon 模式，以及 RAFS v6 + fscache 的形态；那时一个常驻进程服务多个容器，下面几个问题的表现也随之不同。）</p>
+</div>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">强制删除 Pod 可能留下孤儿进程</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">kubectl delete --force 可能打断 snapshotter 的 Remove 流程，导致“卸载挂载点 + 停止 daemon”没有执行。它不会因为长时间空闲而自动退出，节点运行越久，残留进程可能越多。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">只结束进程不能完成清理</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">如果启用了 daemon 恢复或重启策略，snapshotter 会根据自身记录重新拉起被结束的 daemon。要完整清理，需要从上游删除对应的 Pod 或 snapshot（crictl rmp / ctr snapshots rm），让 snapshotter 执行完整的销毁流程。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:20px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">需要检查的环节更多</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">容器读取文件报错时，问题可能来自应用、overlayfs、nydusd、blobcache、远端存储，甚至过期凭据。每增加一个组件，就增加一类故障可能。</p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#be123c;margin:26px 0 12px;">6.3　blobcache 不属于快照</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">另一个需要特别注意的问题是：<strong>blobcache 与快照拥有不同的生命周期。</strong></p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #ea580c;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">删容器不会删缓存</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">随着节点运行过的镜像越来越多，缓存目录会持续增长，必须单独限制容量并制定清理规则。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #f43f5e;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:20px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">daemon 还活着时手动删缓存很危险</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">文件虽然被 unlink，但文件描述符仍可能保持打开，nydusd 的内存状态和磁盘状态不再一致，容器侧可能出现 input/output error。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">正确顺序是：先让相关 daemon 全部退出，再清理缓存。可惜在“半夜磁盘告警，先赶紧删点东西”的场景里，这条规则最容易被忽略。监控上至少要补充两个指标：<strong>blobcache 容量增长曲线</strong>和<strong>缓存命中率</strong>。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#be123c;margin:26px 0 12px;">6.4　产物非原生 OCI：无法自动改用普通拉取</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这是 Nydus 和 eStargz 之间最本质的工程差别。</p>
+
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+  <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">✓ eStargz 有退路</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">产物仍是合法 OCI 层。不认识它的运行时会当作普通镜像全量拉取，即使 Pod 被调度到未安装组件的节点，通常也只是没有加速，容器仍可启动。</p>
+</div>
+<div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:12px 16px;margin-bottom:20px;">
+  <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">✗ Nydus 没有退路</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.7;">转换后的数据层不能由普通 OCI 运行时直接解包，没有 Nydus 运行时支持的节点无法直接启动它。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">这意味着：小规模试用时需要把节点分组并设置调度规则；制品库通常需要同时保留原生镜像和 Nydus 镜像，构建流水线多出一个转换环节；安全扫描、镜像签名和准入策略等工具链，需要逐一验证能否识别转换后的产物——在合规要求严格的组织中，这一步甚至可能比运行时改造更耗时。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#be123c;margin:26px 0 12px;">6.5　对内核版本的要求</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">RAFS v6 使用 fscache 时要求<strong>内核 ≥ 5.19</strong>。这只是入门门槛——failover、共享 daemon 等能力往往还需要更高版本，落地前要按发行版内核逐项确认。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">旧内核可以退回 FUSE 模式，核心功能仍然可用，但 v6 相比 v5 的一项重要优势——元数据由内核解析、缓存命中时不再穿越用户态——就无法完全发挥。尤其要注意：<strong>不能用“顺序读取性能接近 loop device”的测试结果来说明 FUSE 模式的性能</strong>，因为这类结果通常来自 fscache 模式。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#be123c;margin:26px 0 12px;">6.6　后端可达性 = 镜像可用性</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">传统 pull 有一个朴素的可靠性优势：镜像完整下载后，运行中的容器就不再依赖制品库。懒加载却把这种依赖<strong>延长到了整个容器生命周期</strong>。一个已经运行三天的训练任务，如果突然读取此前从未访问过的文件，仍可能需要通过网络从远端下载。</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:32px;color:#f43f5e;line-height:1;margin:0 0 6px;">“</p>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">远端存储无法访问、blob 被误删、凭据过期或网络抖动，都可能让运行中的容器出现 input/output error。故障影响从“启动阶段”扩展到了“整个生命周期”——一次制品库抖动，可能同时影响大量已经运行数小时的训练任务。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">因此，如果制品库和网络连接还不够可靠，就不宜贸然把懒加载用于关键训练任务。对 Nydus 来说，镜像存储服务已经从“启动时依赖”变成了“运行期依赖”。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#be123c;margin:26px 0 12px;">6.7　两条路线的完整对照</p>
+
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+  <tr>
+    <td style="padding:10px 12px;background:#0f172a;color:#cbd5e1;font-weight:500;font-size:12px;">维度</td>
+    <td style="padding:10px 12px;background:#0f172a;color:#cbd5e1;font-weight:500;font-size:12px;">eStargz</td>
+    <td style="padding:10px 12px;background:#0f172a;color:#cbd5e1;font-weight:500;font-size:12px;">Nydus（RAFS v6）</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:12px;">格式本质</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">tar.gz 的可随机读扩展</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">专用只读 FS：bootstrap + chunk blobs</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:12px;">与 OCI 兼容</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#16a34a;font-size:12px;">完全兼容，可退化全量拉取</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#be123c;font-size:12px;">非原生 OCI，必须有 Nydus 运行时</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:12px;">制品库要求</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">任意标准制品库（需 Range）</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">标准制品库（同样需 Range）或对象存储</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:12px;">去重粒度</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">仅整层 digest 级</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">chunk 级；跨镜像需 chunk-dict</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:12px;">挂载模型</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">N 层 → N 个 FUSE + overlayfs</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">一个合并挂载，与层数无关</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:12px;">按需加载位置</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">用户态 FUSE + gzip</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">FUSE（v5）或内核态 EROFS + fscache（v6）</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:12px;">压缩算法</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">受限于 gzip</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">gzip / zstd 等</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:12px;">预取机制</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">构建期物理重排 + landmark</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">bootstrap 预取表，后台批量拉</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:12px;">运行时依赖</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">1 个 snapshotter 进程</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">snapshotter + nydusd + mount helper</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:12px;">P2P 分发</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">无一等公民集成，可经 mirror 间接使用</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">可直接与 Dragonfly 配合使用</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;font-size:12px;">转换工具</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">nerdctl image convert --estargz</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;font-size:12px;">nydusify convert</td>
+  </tr>
+  <tr>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#334155;font-size:12px;">改造成本 / 能力上限</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">低 / 中</td>
+    <td style="padding:9px 12px;border-bottom:1px solid #e2e8f0;background:#f8f8fc;color:#64748b;font-size:12px;">中 / 高</td>
+  </tr>
+</table>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===== 07 ===== -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+  <tr>
+    <td width="46" valign="top" style="padding-top:2px;">
+      <span style="display:inline-block;font-size:11px;font-weight:500;color:#8b5cf6;background:#f5f3ff;border:1px solid #ddd6fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">07</span>
+    </td>
+    <td valign="top">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #8b5cf6;">写在技术博客之外的话</p>
+    </td>
+  </tr>
+</table>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">到这里，技术账已经基本算清：Nydus 可以实现更多功能，但也增加了运行时组件和运维工作。但真正决定是否采用它的，往往不是某一项性能指标。</p>
+
+<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:18px 22px;margin:24px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#6d28d9;line-height:1.85;margin:0;text-align:justify;">决定选型的，通常不是哪个技术更好，而是谁在为启动时间付钱。</p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#6d28d9;margin:26px 0 12px;">7.1　被吐槽十年的 OCI，为什么还是主流</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">tar.gz 不擅长随机访问，社区对此抱怨已久。可它今天依然是默认选择，最重要的原因只有一个：</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;text-align:center;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:20px;font-weight:700;color:#a78bfa;line-height:1.7;margin:0;">所有人都实现了它。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">围绕“layer + digest”建立的工具链极其庞大：Harbor、Artifactory、ECR 等制品库，docker build、BuildKit、Kaniko 等构建工具，Trivy、Clair 等漏洞扫描工具，还有签名验签、准入控制、CI/CD、离线分发、灾备和审计系统。它们共享同一个基本假设：镜像由一组按 digest 寻址的层组成。</p>
+
+<div style="background:#f5f3ff;border-left:4px solid #8b5cf6;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#8b5cf6;margin:0 0 8px;">核心判断</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">一种格式的价值，不只在于设计是否优雅，还在于它是不是所有参与方的最大公约数。任何替代方案都需要与这条工具链逐环适配，参与方越多，协调成本就越高。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">再回头看 eStargz 的“在旧格式里雕花”，就能理解这种选择并非保守，而是为了尽量少修改现有工具。它放弃一部分功能，换来制品库、扫描、签名等工具继续工作的可能性。这也解释了为什么这种方案虽然不如专用格式彻底，仍然会被广泛采用。</p>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#6d28d9;margin:26px 0 12px;">7.2　启动慢，对谁才是问题</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">对<strong>长时间运行的大规模训练</strong>来说，答案往往是否定的。一个任务要运行几天甚至几周，启动多花五分钟，占整个生命周期的比例可能微乎其微。这类场景更值得优先解决的，通常是训练稳定性、checkpoint 保存与恢复、通信效率以及故障恢复速度。</p>
+
+<div style="background:#fff3ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">值得警惕</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">如果启动时间占比不到 1%，引入懒加载就可能增加许多运行时故障类型，却只能换取非常有限的时间收益。一次 blobcache 异常导致的训练中断，就可能抵消此前节省的全部启动时间。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">但也有例外，它们的共同点是：<strong>启动成本会被次数放大。</strong></p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">Spot / 抢占式训练</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">被抢占一次就换一次节点，启动成本乘以抢占频率。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">大集群的故障重调度</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">节点规模上去之后，“总有节点在故障”，重调度会成为常态。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:20px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">调试和频繁发布版本</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">改一行代码就要重新运行一次，工程师会反复等待。</p>
+</div>
+
+<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:18px 22px;margin:24px 0;text-align:center;">
+  <p style="font-size:12px;color:#8b5cf6;letter-spacing:0.1em;margin:0 0 8px;">该看的不是单次启动多久，而是</p>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:17px;font-weight:700;color:#6d28d9;line-height:1.8;margin:0;">启动时间 × 启动次数 ÷ 总运行时间</p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#6d28d9;margin:26px 0 12px;">7.3　但 serverless 是另一个世界</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">如果把同一项技术放到 RunPod、Modal 这类 serverless GPU 平台上，结论可能完全相反。在那里，<strong>计费单位是秒，用户也会直接感受到每一秒的等待。</strong>从点击“运行”到服务可用之间的时间，无法像长时间训练那样在总运行时间中变得微不足道。冷启动 90 秒与冷启动 3 秒，带来的并不只是性能数字差异，而是截然不同的使用体验。</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">镜像在这里也不再只是“运行环境的一部分”，而是<strong>服务启动过程中的一个步骤</strong>。它与 CDN、网页加载时间属于同一类问题：延迟直接影响体验，体验又会影响用户是否继续使用产品。</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:8px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">训练集群</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">一个镜像可能在同一节点上连续运行一周，chunk 级去重和 blobcache 跨镜像复用的机会有限。</p>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #8b5cf6;border-radius:0 6px 6px 0;padding:14px 16px;margin-bottom:20px;">
+  <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0 0 4px;">serverless 平台</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.7;">同一节点一天内可能启动几十甚至上百个租户镜像，而它们往往共享 CUDA、PyTorch 和常用依赖。后启动的某个镜像，大部分 chunk 可能已经存在于本机 blobcache 中。</p>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">因此，对 serverless GPU 平台来说，镜像加速会直接影响服务能否在规定时间内启动。这也解释了为什么许多平台会自行开发或大幅修改懒加载方案：它们的服务方式几乎不允许较长的冷启动时间。</p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:32px;color:#a78bfa;line-height:1;margin:0 0 6px;">“</p>
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">同一项技术，在长时间训练平台上可能收益有限，在 serverless 场景中却可能直接决定服务是否可用。差别不只在技术本身，还在于启动延迟是否计费，以及用户是否需要等待。</p>
+</div>
+
+<p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#6d28d9;margin:26px 0 12px;">7.4　那到底怎么决定</p>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">先不要急着比较技术参数，回答下面三个问题：</p>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#8b5cf6;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>启动时间占总运行时间多少？</strong>如果只占很小比例，应优先优化其他瓶颈。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#8b5cf6;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>不同镜像之间有多少相同内容？</strong>只有一两个镜像时，chunk 去重收益有限，eStargz 所需的修改较少；几十个镜像共享同一个基础镜像时，Nydus 才更容易节省大量空间和流量。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:20px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#8b5cf6;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>组织里是否有人长期维护这套系统？</strong>如果没有，应优先选择发生故障时仍能按普通镜像启动、并且团队更熟悉的方案。</p></td>
+  </tr></table>
+</div>
+
+<div style="background:#fff3ed;border-left:4px solid #ea580c;padding:16px 18px;margin:22px 0;border-radius:0 6px 6px 0;">
+  <p style="font-size:11px;font-weight:bold;letter-spacing:0.1em;color:#ea580c;margin:0 0 8px;">保持诚实</p>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.8;margin:0;color:#334155;text-align:justify;">本文中的倍数和趋势，都来自特定镜像、网络和后端条件。真正的收益必须先在少量测试节点上，用自己的镜像重新测量。阅读社区或厂商材料时，也要确认缓存是否已有数据、远端存储距离多远、读取方式是什么，不要把理想条件下的数字直接当作生产环境的预期。</p>
+</div>
+
+<div style="text-align:center;margin:32px 0;">
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+  <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6366f1;vertical-align:middle;margin:0 10px;"></span>
+  <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+</div>
+
+<!-- ===== 08 小结 ===== -->
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
+  <tr>
+    <td width="46" valign="top" style="padding-top:2px;">
+      <span style="display:inline-block;font-size:11px;font-weight:500;color:#6366f1;background:#eef2ff;border:1px solid #c7d2fe;padding:4px 9px;border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">08</span>
+    </td>
+    <td valign="top">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#0f172a;line-height:1.45;margin:0;padding-bottom:8px;border-bottom:2px solid #6366f1;">小结</p>
+    </td>
+  </tr>
+</table>
+
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#6366f1;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">1</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>eStargz 是在旧格式里雕花，Nydus 则是重画一张图纸。</strong>前者继续以 layer 为压缩、寻址和叠加单位；后者把压缩与寻址细化到 chunk，把运行时文件系统视图提升到整个镜像。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#16a34a;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">2</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>新设计带来的收益</strong>：chunk 级去重、与层数无关的单一合并挂载、可选的内核态数据路径，以及更灵活的压缩算法。</p></td>
+  </tr></table>
+</div>
+<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:20px;">
+  <table cellpadding="0" cellspacing="0"><tr valign="top">
+    <td width="32" style="padding-top:1px;"><div style="width:24px;height:24px;background:#f43f5e;border-radius:50%;text-align:center;line-height:24px;"><span style="font-size:12px;font-weight:700;color:#ffffff;">3</span></div></td>
+    <td style="padding-left:10px;"><p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.7;margin:0;"><strong>对应的代价</strong>：许多工作从启动阶段转移到运行阶段——冷缓存首读更慢、常驻 daemon 带来生命周期问题、blobcache 需要单独管理、普通 OCI 运行时无法直接使用转换后的镜像，且容器运行期间持续依赖远端镜像存储。</p></td>
+  </tr></table>
+</div>
+
+<p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">技术之外，更重要的结论是：<strong>OCI 被广泛使用，不仅因为格式本身，还因为大量工具都支持它；替换方案最昂贵的部分，往往不是安装组件，而是学习新的维护和故障处理方法；启动慢对长时间训练可能无关紧要，对 serverless 却可能直接影响使用体验。</strong></p>
+
+<div style="background:#0f172a;border-radius:8px;padding:26px 22px;margin:28px 0 0;text-align:center;">
+  <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#bfc7d2;line-height:2;margin:0;">
+  镜像懒加载从来不是一道<br>“哪项技术更先进”的单选题。<br><br>
+  <strong style="color:#818cf8;">真正该问的是：你的业务是否足够需要它，<br>你的基础设施是否承受得起它，<br>你的团队是否维护得住它。</strong>
+  </p>
+</div>
+
+<div style="margin-top:44px;padding-top:18px;border-top:1px solid #e2e8f0;">
+  <p style="font-size:11px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.8;">
+  Nydus · RAFS · containerd · 镜像懒加载 · 分布式训练 · 云原生
+  </p>
+</div>
+
+</div>
+</div>
+</body>
+</html>
