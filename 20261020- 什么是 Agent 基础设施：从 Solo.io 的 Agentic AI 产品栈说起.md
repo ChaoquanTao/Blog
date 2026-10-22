@@ -1,8 +1,20 @@
-# 什么是 Agent 基础设施：让 AI Agent 走进生产的那一层
+---
+title: 什么是 Agent 基础设施：从 Solo.io 的 Agentic AI 产品栈说起
+date: 2026-10-20
+categories: AI Infra
+tags:
+  - AI Agent
+  - Agent 基础设施
+  - MCP
+  - A2A
+  - kagent
+  - agentgateway
+  - 云原生
+---
 
-Oct 20, 2026 · @Tau
+# 什么是 Agent 基础设施：从 Solo.io 的 Agentic AI 产品栈说起
 
-Agent 基础设施是让 AI Agent 从"能跑的 demo"变成"敢放进生产的系统"的那一层底座：它不让 Agent 更聪明，而是让 Agent 可运行、可连接、可控制、可观测、可信任。
+> Agent 基础设施是让 AI Agent 从"能跑的 demo"变成"敢放进生产的系统"的那一层底座：它不让 Agent 更聪明，而是让 Agent 可运行、可连接、可控制、可观测、可信任。
 
 ## 引言：demo 和生产之间隔着一层看不见的东西
 
@@ -12,7 +24,9 @@ Agent 基础设施是让 AI Agent 从"能跑的 demo"变成"敢放进生产的�
 
 这些问题和模型能力无关，却每一个都能让项目停在试点阶段。安全、可观测性、韧性和治理，才是阻碍 Agent 从试点走向生产的主要障碍。回答这些问题的那一层，就是 Agent 基础设施。
 
-本文先讲清楚这个概念，再按层拆解它在工程上长什么样，最后给出开源生态中的代表性实现和落地建议。
+为什么从 Solo.io 说起？这家以服务网格和 API 网关起家的公司，近两年围绕 Agent 陆续开源了 kagent（运行时）、agentgateway（网关）、agentregistry（注册中心）和 agentevals（评估），恰好覆盖了 Agent 基础设施的大部分层次，而且几个项目都已进入 CNCF 或 Linux Foundation 等中立基金会。用它作为参照样本，能把一个抽象的概念落到具体的工程组件上。
+
+本文先讲清楚这个概念，再按层拆解它在工程上长什么样，最后以这套产品栈为例，看看每一层的代表性实现，以及它们如何串成一个 Agent 的完整生命周期。
 
 ## 什么是 Agent 基础设施
 
@@ -50,17 +64,24 @@ Agent 基础设施是同样的思路，只是服务对象从"确定性的程序"
 
 把上面的需求归类，Agent 基础设施可以拆成六层。它们位于业务 Agent 之下、模型与云原生底座之上，每一层回答一个上线前必须回答的问题。
 
-&#91;embedded content: Agent 基础设施分层模型 · 6 层及典型开源项目\]
+| 层 | 回答的问题 | 典型开源项目 |
+| --- | --- | --- |
+| ⑥ 评估 | 它靠不靠谱？改动之后变好了还是变坏了？ | agentevals |
+| ⑤ 可观测 | 它刚才做了什么、花了多少、哪一步出错？ | OpenTelemetry |
+| ④ 注册与治理 | 公司里有哪些 Agent 和工具？哪些被批准使用？ | agentregistry |
+| ③ 身份与策略（横跨运行时与网关） | 谁能调用什么？Agent 代表谁在行动？ | 由运行时与网关共同实现 |
+| ② 连接与网关 | Agent 怎么安全地连到模型、工具和其他 Agent？ | agentgateway |
+| ① 运行时 | Agent 在哪里跑、怎么部署和扩缩容？ | kagent |
 
-运行时和网关是地基，身份策略横跨两者；注册、可观测、评估则决定 Agent 能否被规模化地管理和信任。右侧标签是各层的典型开源项目示例，可替换为任意同类方案。
+表格自上而下对应从业务 Agent 到底座的顺序：最上面是业务 Agent，最下面是大模型与 Kubernetes 等云原生底座。运行时和网关是地基，身份策略横跨两者；注册、可观测、评估则决定 Agent 能否被规模化地管理和信任。表中项目只是各层的典型示例，可替换为任意同类方案。
 
 ## 开源生态中的代表性实现
 
-近两年，云原生社区已经为每一层长出了专门的开源项目，不少已进入中立基金会。下面按层举例：重点是每一层要解决什么，项目只是参照。
+近两年，云原生社区已经为每一层长出了专门的开源项目，不少已进入中立基金会。下面以 Solo.io 发起的这组项目为主线按层举例：重点是每一层要解决什么，项目只是参照。
 
 ### 运行时：把 Agent 当作一等资源
 
-以 [kagent](https://github.com/kagent-dev/kagent) 为例，它把 Agent、模型配置、MCP 工具都定义成 Kubernetes 自定义资源，用 YAML 声明、用 kubectl 管理。它由控制器、UI、执行引擎和 CLI 组成，内置 Kubernetes、Istio、Helm、Argo、Prometheus 等工具，是 [CNCF sandbox 项目](https://kagent.dev/docs/kagent/introduction/what-is-kagent)。云厂商的托管 Agent 平台是另一条路线：免运维，但与特定云绑定。
+以 Solo.io 开源的 [kagent](https://github.com/kagent-dev/kagent) 为例，它把 Agent、模型配置、MCP 工具都定义成 Kubernetes 自定义资源，用 YAML 声明、用 kubectl 管理。它由控制器、UI、执行引擎和 CLI 组成，内置 Kubernetes、Istio、Helm、Argo、Prometheus 等工具，是 [CNCF sandbox 项目](https://kagent.dev/docs/kagent/introduction/what-is-kagent)。云厂商的托管 Agent 平台是另一条路线：免运维，但与特定云绑定。
 
 典型场景是值班排障。告警触发后，工程师在 Slack 里让 Agent 查看 Pod 事件、日志和内存曲线，Agent 建议调大 memory limit；由于修改 Deployment 是写操作，执行前需要人工批准。
 
@@ -68,7 +89,7 @@ Agent 基础设施是同样的思路，只是服务对象从"确定性的程序"
 
 ### 连接与网关：理解 Agent 协议的数据面
 
-以 [agentgateway](https://agentgateway.dev/) 为例，它用 Rust 编写，一个数据面同时处理 HTTP/gRPC 服务流量、LLM 调用、MCP 和 A2A，目前是 [Agentic AI Foundation 项目](https://agentgateway.dev/docs/standalone/main/documentation/about/introduction/)。这一层通常解决三类问题：
+以 [agentgateway](https://agentgateway.dev/) 为例，它用 Rust 编写，一个数据面同时处理 HTTP/gRPC 服务流量、LLM 调用、MCP 和 A2A，最初由 Solo.io 开源，现为 Linux Foundation 旗下 [Agentic AI Foundation（AAIF）的托管项目](https://agentgateway.dev/docs/standalone/main/documentation/about/introduction/)。这一层通常解决三类问题：
 
 - MCP 治理：把多个 MCP Server 聚合到一个入口，按身份限定每个调用方能用哪些工具，对工具调用做审计和注入防护；还能把现有 REST API 通过 OpenAPI 直接暴露成 MCP 工具。
 - LLM 出口治理：统一接入多家模型，提供虚拟 Key、按团队的 token 预算和花费上限、故障切换。
@@ -78,13 +99,13 @@ Agent 基础设施是同样的思路，只是服务对象从"确定性的程序"
 
 ### 注册与治理：企业内部的"Agent 应用商店"
 
-以 [agentregistry](https://github.com/agentregistry-dev) 为例，它集中编目、发现和治理三类制品：Agent、MCP 工具和 Agent Skills，设计上参考了官方 MCP registry 的思路。
+以 [agentregistry](https://github.com/agentregistry-dev) 为例，它由 Solo.io 开源、已贡献给 CNCF，集中编目、发现和治理三类制品：Agent、MCP 工具和 Agent Skills，设计上参考了官方 MCP registry 的思路。
 
 平台团队把审核过的故障排查 Agent、慢查询分析 Skill、内部 CMDB 的 MCP Server 发布上去；业务团队搜索、组合、一键部署，而不是去 GitHub 上随手找来路不明的 MCP Server。平台团队也因此能看清公司里跑着哪些 Agent、用了哪些工具。
 
 ### 评估：把"靠不靠谱"变成可度量的指标
 
-这一层的代表包括 agentevals 等开源项目，以及 LangSmith、Langfuse 等评估与可观测平台。共同的思路是：基于追踪数据采集 Agent 的每一次调用，对照团队定义的黄金评估集打分，常用轨迹匹配和 LLM-as-judge 两类评估器，并在换模型、加工具或改提示词时告警。
+这一层的代表包括 Solo.io 于 2026 年 3 月开源的 [agentevals](https://solo.io/press-releases/introducing-new-agentic-open-source-project-agentevals)，以及 LangSmith、Langfuse 等评估与可观测平台。共同的思路是：基于追踪数据采集 Agent 的每一次调用，对照团队定义的黄金评估集打分，常用轨迹匹配和 LLM-as-judge 两类评估器，并在换模型、加工具或改提示词时告警。
 
 典型场景是换模型。团队想把运维 Agent 换成更便宜的模型，跑一遍黄金集后发现：多数用例表现一致，但网络策略类问题经常跳过关键排查步骤。于是只在简单问题上用便宜模型，复杂问题仍路由给强模型，而这个路由本身又可以交给网关层来做。
 
@@ -105,18 +126,6 @@ OpenTelemetry 已经成为这一层的事实标准。好的 Agent 基础设施�
 
 这个闭环里，没有任何一步依赖模型"更聪明"，全部是工程问题。这正是 Agent 基础设施的价值所在。
 
-## 行业格局与落地建议
-
-Agent 基础设施的供给方大致有三类：云厂商的托管 Agent 平台（如 AWS Bedrock AgentCore、Azure AI Foundry、Google Vertex AI Agent Engine）；Agent 运行时、AI 网关、注册中心等开源项目；以及 LangSmith、Langfuse 等可观测与评估工具。关键权衡是：托管平台上手快但绑定云厂商，开源自建更灵活、可跨云，但需要平台团队投入。
-
-如果你正准备在团队里引入 Agent 基础设施，几条实用建议：
-
-- 先治理流量，再扩张数量。在 Agent 还不多的时候，就让所有模型和 MCP 调用经过统一网关，计量和审计越早越便宜。
-- 权限从只读开始。Agent 能做什么完全取决于你给它的身份和权限，确认可靠之后再逐步开放写操作，并保留人工审批。
-- 把评估当成 CI 的一部分。没有黄金评估集，就无法回答"换模型安不安全"这类问题。
-- 尽早建立目录。第二个团队开始造 Agent 的时候，就该有注册中心了。
-- 看清开源与商业版的边界。许多项目采用开源核心加企业版的模式，评估时要确认集中管理平面、多集群联邦、SLA 等能力在哪个版本里。
-
 ## 结语
 
 十年前，容器让应用变得容易打包，但真正让企业放心上云的，是围绕容器长出来的 Kubernetes、服务网格、可观测性那一整套基础设施。今天的 Agent 正处在相似的位置：能力已经足够，缺的是让它在生产中可控、可审计、可信任的底座。
@@ -131,3 +140,6 @@ Agent 基础设施的供给方大致有三类：云厂商的托管 Agent 平台�
 - [agentgateway 文档：Introduction](https://agentgateway.dev/docs/standalone/main/documentation/about/introduction/)
 - [agentgateway 文档：本地部署概览](https://agentgateway.dev/docs/local/main)
 - [agentregistry GitHub](https://github.com/agentregistry-dev)
+- [Solo.io：Introducing agentevals](https://solo.io/press-releases/introducing-new-agentic-open-source-project-agentevals)
+- [Cloud Native Now：Solo.io Launches agentevals, Contributes agentregistry to CNCF](https://cloudnativenow.com/uncategorized/solo-io-launches-agentevals-open-source-project-contributes-agentregistry-to-cncf/)
+- [IT Brief：Agentic AI Foundation adds agentgateway as hosted project](https://itbrief.co.uk/story/agentic-ai-foundation-adds-agentgateway-as-hosted-project)
