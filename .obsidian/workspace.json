@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "20261020- 什么是 Agent 基础设施：从 Solo.io 的 Agentic AI 产品栈说起.md",
+                "file": "20261023-Codex&Claude桌面端零基础安装教程.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "20261020- 什么是 Agent 基础设施：从 Solo.io 的 Agentic AI 产品栈说起"
+              "title": "20261023-Codex&Claude桌面端零基础安装教程"
             }
           },
           {
@@ -221,6 +221,22 @@
   },
   "active": "0b98efe9b25f9906",
   "lastOpenFiles": [
+    "Codex&Claude桌面端零基础安装教程_wechat.html",
+    "20261020- 什么是 Agent 基础设施：从 Solo.io 的 Agentic AI 产品栈说起.md",
+    "images/codex-claude-install/wechat/10-ccswitch-copilot.jpg",
+    "images/codex-claude-install/wechat/09-copilot-models.jpg",
+    "images/codex-claude-install/wechat/08-copilot-plans.jpg",
+    "images/codex-claude-install/wechat/07-claude-desktop-gateway.jpg",
+    "images/codex-claude-install/wechat/06-ccswitch-enabled.jpg",
+    "images/codex-claude-install/wechat/05-ccswitch-deepseek-form.jpg",
+    "images/codex-claude-install/wechat/04-ccswitch-provider-list.jpg",
+    "images/codex-claude-install/wechat/03-ccswitch-claude-desktop.jpg",
+    "images/codex-claude-install/wechat/02-deepseek-apikey.jpg",
+    "images/codex-claude-install/wechat/01-deepseek-recharge.jpg",
+    "images/codex-claude-install/wechat",
+    "Codex&Claude零基础安装教程_wechat.html",
+    "images/codex-claude-install",
+    "20261023-Codex&Claude桌面端零基础安装教程.md",
     "什么是Agent基础设施_wechat.html",
     "AGENTS.md",
     "20260731-容器里的RDMA：hostNetwork与SR-IOV的两条路.md",
@@ -229,16 +245,9 @@
     "Untitled 1.canvas",
     "20260831-训练加速之镜像懒加载（二）.md",
     "训练加速之镜像懒加载（二）_wechat.html",
-    "nydus_dedup.png",
-    "nydus_rafs_layout.png",
-    "nydus_runtime_arch.png",
-    "images/distributed-tranning/nydus_dedup.svg",
-    "images/distributed-tranning/nydus_rafs_layout.svg",
     "分布式训练之镜像加速（二）.md",
-    "images/distributed-tranning/nydus_runtime_arch.svg",
     "分布式训练之镜像加速-dragonfly.md",
     "20260720-训练加速之镜像懒加载（一）.md",
-    "images/rdma/rdma-write-flow.svg",
     "images/rdma",
     "镜像加速选型_eStargz-vs-Nydus.html",
     "训练加速之镜像懒加载（一）_分享版.html",
@@ -246,18 +255,11 @@
     "20260713-深入浅出GPU架构.md",
     "分布式训练之镜像加速（一）_wechat.html",
     "分布式训练之镜像加速（二）_wechat.html",
-    "images/distributed-tranning/estargz_runtime_arch.svg",
-    "images/gpu-arch/memory-hierarchy.svg",
-    "images/gpu-arch/sm-structure.svg",
-    "images/gpu-arch",
-    "vLLM是怎么工作的_wechat.html",
     "20260622-level-trigger-or-edge-trigger.md",
     "vllm是怎么工作的.md",
-    "level-trigger-or-edge-trigger_wechat.html",
     "20260503-浅谈Go语言中的Channel.md",
     "20260622-k8s controller开发范式.md",
     "20260529-一次Kubernetes升级引发的DevicePlugin注册失败.md",
-    "一次K8s升级引发的DevicePlugin注册失败_wechat.html",
     "20191010-一次由继承引发的思考.md",
     "k8s-controller-development-paradigm.md",
     "本周科技要闻-20260620.md",
@@ -266,8 +268,6 @@
     "20191106-MySQL索引篇.md",
     "20260616-FUSE：让文件系统工作在用户空间.md",
     "20191002-Spring的一点思考.md",
-    "20191030-海量数据与空间限制面试题.md",
-    "numa参考资料.md",
-    "从第一性原理理解NUMA.md"
+    "20191030-海量数据与空间限制面试题.md"
   ]
 }
