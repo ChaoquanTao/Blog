@@ -1,6 +1,7 @@
 ---
 title: Codex & Claude 桌面端零基础安装教程
 date: 2026-10-23
+published: false
 categories: AI 工具
 tags:
   - Claude
