@@ -221,6 +221,8 @@
   },
   "active": "0b98efe9b25f9906",
   "lastOpenFiles": [
+    "20261124-一次DDP训练背后：CPU、GPU与NCCL是如何协作的.md",
+    "nccl_stream_workflow.md",
     "20261123-GPU虚拟化（二）：HAMi 与 HAMi-core 原理.md",
     "20261123-GPU虚拟化（一）：NVIDIA MIG 硬件切分.md",
     "Codex&Claude桌面端零基础安装教程_封面_方.svg",
@@ -266,8 +268,6 @@
     "本周科技要闻-20260620.md",
     "20191015-https协议.md",
     "20190112-直面Java.md",
-    "20191106-MySQL索引篇.md",
-    "20260616-FUSE：让文件系统工作在用户空间.md",
-    "20191002-Spring的一点思考.md"
+    "20191106-MySQL索引篇.md"
   ]
 }
