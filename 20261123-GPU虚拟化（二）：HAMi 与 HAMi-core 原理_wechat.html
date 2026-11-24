@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPU虚拟化（二）：HAMi 与 HAMi-core 原理</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7f8;font-family:'STSong','SimSun','Noto Serif SC',serif;color:#334155;">
+
+<!--
+  WeChat Official Account HTML (Inline-Style Only)
+  Theme: 深海蓝绿 (Deep Ocean Teal)
+    navy:         #16213e
+    teal:         #0d7377
+    teal_light:   #e8f5f5
+    teal_mid:     #14a085
+    teal_border:  #99d5d6
+    accent:       #e85d04
+    accent_light: #fff3ed
+-->
+
+<div style="max-width:680px;margin:0 auto;background:#ffffff;">
+
+  <!-- ==================== HERO ==================== -->
+  <div style="background:#16213e;padding:48px 24px 42px;text-align:center;">
+    <div style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;letter-spacing:0.12em;color:#5eead4;background:#1e3448;border:1px solid #14a085;padding:5px 16px;border-radius:20px;margin-bottom:20px;">GPU 虚拟化系列 · 02</div>
+    <div style="height:6px;"></div>
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:25px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">
+      <span style="color:#5eead4;">HAMi</span> 与 <span style="color:#5eead4;">HAMi-core</span> 原理<br>软件层 GPU 切分是如何做到的？
+    </p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.75;">
+      从 ld.so 与 LD_PRELOAD 底层拦截机制<br>到 Kubernetes vGPU 调度全链路与 7 类主流方案全景对比
+    </p>
+    <div style="width:40px;height:2px;background:#14a085;margin:22px auto 0;"></div>
+  </div>
+
+  <!-- ==================== BODY WRAPPER ==================== -->
+  <div style="padding:28px 20px 36px;">
+
+    <!-- 导语 Callout -->
+    <div style="background:#e8f5f5;border-left:4px solid #0d7377;padding:16px 18px;margin:0 0 28px;border-radius:0 6px 6px 0;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;color:#0d7377;margin:0 0 8px;">阅读导引</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.85;margin:0;color:#334155;text-align:justify;">
+        上一篇我们拆解了硬件级切分方案 NVIDIA MIG。本篇聚焦 CNCF 开源项目 <strong style="color:#0d7377;">HAMi</strong> 与底层核心库 <strong style="color:#0d7377;">HAMi-core（libvgpu.so）</strong>，讲清它如何不依赖特殊硬件、不改一行业务代码，在 Kubernetes 中实现任意细粒度的 GPU 软件切分，并在文末系统盘点业界 7 类主流 GPU 虚拟化路线。
+      </p>
+    </div>
+
+    <!-- ==================== SECTION 01 ==================== -->
+    <div style="margin:32px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">01</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">承接上篇：在 Kubernetes 里，我们需要怎样的 GPU 切分？</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      上一篇我们聊了 NVIDIA MIG。它像给大平层砌承重墙一样，在硬件层面把一张大 GPU 物理隔开，虚拟化调度层几乎零开销、隔离性拉满。但一旦把视角放到真实的 <strong style="color:#16213e;">Kubernetes 集群</strong>里，MIG 的短板就非常明显了：
+    </p>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #e85d04;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;margin:0;line-height:1.75;text-align:justify;">
+        <strong style="color:#16213e;">存量卡不支持</strong>：集群里大量卡是 <strong>T4、V100、A10、L40</strong>，芯片里压根没有 MIG 硬件电路；
+      </p>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #e85d04;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;margin:0;line-height:1.75;text-align:justify;">
+        <strong style="color:#16213e;">粒度不够细</strong>：业务需求五花八门——有人只要 <strong>2GB 显存</strong>跑 Embedding，有人要 <strong>12GB 显存 + 30% 算力</strong>跑小模型，固定规格的 MIG 切不出这么细的粒度；
+      </p>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #e85d04;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:18px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;margin:0;line-height:1.75;text-align:justify;">
+        <strong style="color:#16213e;">静态规格碎片</strong>：整张卡明明空着，却因为预切规格对不上导致 Pod 一直 Pending。
+      </p>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#16213e;border-left:3px solid #0d7377;padding-left:16px;margin:18px 0;line-height:1.9;text-align:justify;">
+      于是问题变成了：<strong>能不能不依赖特殊硬件，在软件层面把任意一张 GPU 按需切分，并且无缝融入 Kubernetes 的调度体系？</strong>
+    </p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      答案就是 CNCF 开源项目 <strong style="color:#0d7377;">HAMi</strong>（Heterogeneous AI Computing Virtualization Middleware，异构 AI 算力虚拟化中间件）以及它最核心的底层组件 <strong style="color:#0d7377;">HAMi-core</strong>。
+    </p>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 02 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">02</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">理清架构：HAMi 和 HAMi-core 是什么关系？</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      很多人容易把 <strong style="color:#16213e;">HAMi</strong> 和 <strong style="color:#16213e;">HAMi-core</strong> 混为一谈，其实它们是<strong style="color:#0d7377;">整体与底层核心模块</strong>的关系：
+    </p>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d7377;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 4px;">HAMi —— 集群侧的“大管家”</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.75;text-align:justify;">
+        整套 Kubernetes 异构算力管理平台（Go 语言为主），负责集群里的资源上报、调度选卡、账本管理与容器注入。
+      </p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #14a085;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:20px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 4px;">HAMi-core —— 容器内的“门禁”</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.75;text-align:justify;">
+        HAMi 旗下的底层 C/C++ 核心库（独立仓库，编译产物即 <span style="font-family:'Courier New',Courier,monospace;background:#e8f5f5;color:#0d7377;padding:1px 5px;border-radius:3px;">libvgpu.so</span>），专门通过 <span style="font-family:'Courier New',Courier,monospace;background:#e8f5f5;color:#0d7377;padding:1px 5px;border-radius:3px;">LD_PRELOAD</span> 实现 NVIDIA GPU 的软件层隔离。
+      </p>
+    </div>
+
+    <!-- 架构图卡片（替代 Mermaid 1） -->
+    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin:20px 0 22px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#0d7377;margin:0 0 12px;">// HAMi 整体分层架构</p>
+
+      <!-- K8s 层 -->
+      <div style="background:#16213e;border-radius:6px;padding:12px 14px;margin-bottom:6px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#5eead4;letter-spacing:0.06em;margin:0 0 6px;">KUBERNETES 控制面 · 调度层</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#ffffff;margin:0 0 4px;">HAMi Scheduler Extender（配合 Mutating Webhook）/ Volcano Scheduler</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#cbd5e1;margin:0;line-height:1.65;">维护全局显存/算力账本，决定 Pod 落到哪张物理卡</p>
+      </div>
+
+      <p style="text-align:center;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:4px 0;">↓ 选卡结果写入 Pod Annotation</p>
+
+      <!-- Device Plugin 层 -->
+      <div style="background:#e8f5f5;border:1px solid #99d5d6;border-radius:6px;padding:12px 14px;margin-bottom:6px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;letter-spacing:0.06em;margin:0 0 6px;">节点侧 · 设备插件层</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#16213e;margin:0 0 4px;">Device Plugin DaemonSet</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;line-height:1.65;">发现节点 GPU、上报资源、启动容器时挂载设备并注入隔离库</p>
+      </div>
+
+      <p style="text-align:center;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#64748b;margin:4px 0;">↓ 容器内隔离层（底层实现按需选择）</p>
+
+      <!-- 三种隔离实现 -->
+      <div style="background:#ffffff;border:1px solid #cbd5e1;border-left:4px solid #0d7377;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#0d7377;margin:0 0 2px;">HAMi-core（libvgpu.so）</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;">软件切分：通过 LD_PRELOAD 拦截 CUDA / NVML 调用</p>
+      </div>
+
+      <div style="background:#ffffff;border:1px solid #cbd5e1;border-left:4px solid #14a085;border-radius:6px;padding:10px 14px;margin-bottom:6px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#0d7377;margin:0 0 2px;">Dynamic MIG</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;">硬件切分：按 Pod 请求动态创建与回收 MIG 实例</p>
+      </div>
+
+      <div style="background:#ffffff;border:1px solid #cbd5e1;border-left:4px solid #64748b;border-radius:6px;padding:10px 14px;margin-bottom:0;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#16213e;margin:0 0 2px;">异构卡适配</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;">统一纳管昇腾、寒武纪、海光等国产/异构 AI 加速卡</p>
+      </div>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      理清整体架构后，最核心的问题就落到了 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#e8f5f5;color:#0d7377;padding:2px 6px;border-radius:4px;border:1px solid #99d5d6;">libvgpu.so</span> 身上：它是如何在不改一行 PyTorch 代码的前提下，拦住容器里的 CUDA 调用的？这就需要了解两个经典的 Linux 底层概念：<strong style="color:#16213e;">动态链接器（ld.so）</strong>和 <strong style="color:#16213e;">LD_PRELOAD</strong>。
+    </p>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 03 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">03</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">底层原理：动态链接器（ld.so）与 LD_PRELOAD</span>
+    </div>
+
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0d7377;margin:18px 0 10px;">3.1 什么是动态链接器（ld.so）？</p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      我们平时写的程序（比如 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#f1f5f9;color:#0f172a;padding:1px 5px;border-radius:3px;">python</span>），会调用大量公共函数——比如打印日志用的 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#f1f5f9;color:#0f172a;padding:1px 5px;border-radius:3px;">printf</span>、申请内存用的 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#f1f5f9;color:#0f172a;padding:1px 5px;border-radius:3px;">malloc</span>，或者操作显卡用的 CUDA 函数 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#e8f5f5;color:#0d7377;padding:1px 5px;border-radius:3px;">cuMemAlloc</span>。编译程序时，处理公共库有两种方式：
+    </p>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.75;text-align:justify;">
+        <strong style="color:#16213e;">静态链接</strong>：编译时把所有依赖库代码全部复制打包进可执行文件。独立性强，但体积巨大，且多个进程无法共享同一份库代码。
+      </p>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:16px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.75;text-align:justify;">
+        <strong style="color:#0d7377;">动态链接（Linux 默认方式）</strong>：编译时不复制库代码，只在可执行文件里留一张“依赖清单”（需要哪些 <span style="font-family:'Courier New',Courier,monospace;">.so</span> 共享库、要调用哪些函数名），等程序真正启动时再去加载系统里的 <span style="font-family:'Courier New',Courier,monospace;">.so</span> 文件。
+      </p>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      正因为库代码不在可执行文件里，程序运行前必须有一个“搬运工 + 接线员”先把库装进来——这就是 <strong style="color:#16213e;">动态链接器（ld.so）</strong>（在 64 位 x86 Linux 上，它通常是 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:1px 4px;border-radius:3px;word-break:break-all;">/lib64/ld-linux-x86-64.so.2</span>）。当你敲下 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#f1f5f9;color:#0f172a;padding:1px 5px;border-radius:3px;">python train.py</span> 时，幕后发生了 4 步：
+    </p>
+
+    <!-- 4 步编号卡片（纯 div，无 table） -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.75;margin:0;text-align:justify;">
+        <span style="display:inline-block;width:20px;height:20px;background:#0d7377;border-radius:50%;text-align:center;line-height:20px;font-size:11px;font-weight:700;color:#ffffff;margin-right:8px;vertical-align:text-bottom;">1</span><strong style="color:#16213e;">内核先唤醒 ld.so</strong>：Linux 内核发现程序是动态链接的，不会直接运行它的 <span style="font-family:'Courier New',Courier,monospace;">main()</span>，而是先把 <span style="font-family:'Courier New',Courier,monospace;">ld.so</span> 跑起来。
+      </p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.75;margin:0;text-align:justify;">
+        <span style="display:inline-block;width:20px;height:20px;background:#0d7377;border-radius:50%;text-align:center;line-height:20px;font-size:11px;font-weight:700;color:#ffffff;margin-right:8px;vertical-align:text-bottom;">2</span><strong style="color:#16213e;">加载 .so 库</strong>：<span style="font-family:'Courier New',Courier,monospace;">ld.so</span> 读取依赖清单（用 <span style="font-family:'Courier New',Courier,monospace;">ldd /bin/ls</span> 可查看），按顺序把 <span style="font-family:'Courier New',Courier,monospace;">libc.so</span>、<span style="font-family:'Courier New',Courier,monospace;">libcuda.so</span> 等映射到内存。日常遇到的 <span style="font-family:'Courier New',Courier,monospace;font-size:12px;">cannot open shared object file</span> 就是这一步报的错。
+      </p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.75;margin:0;text-align:justify;">
+        <span style="display:inline-block;width:20px;height:20px;background:#0d7377;border-radius:50%;text-align:center;line-height:20px;font-size:11px;font-weight:700;color:#ffffff;margin-right:8px;vertical-align:text-bottom;">3</span><strong style="color:#16213e;">符号解析（接线）</strong>：程序只写了“我要调 <span style="font-family:'Courier New',Courier,monospace;">cuMemAlloc</span>”，<span style="font-family:'Courier New',Courier,monospace;">ld.so</span> 按加载顺序查表，把找到的<strong>第一个</strong>同名函数的内存地址填进程序里。
+      </p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:20px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.75;margin:0;text-align:justify;">
+        <span style="display:inline-block;width:20px;height:20px;background:#0d7377;border-radius:50%;text-align:center;line-height:20px;font-size:11px;font-weight:700;color:#ffffff;margin-right:8px;vertical-align:text-bottom;">4</span><strong style="color:#16213e;">交出控制权</strong>：线全部接好后，<span style="font-family:'Courier New',Courier,monospace;">ld.so</span> 跳转到程序的 <span style="font-family:'Courier New',Courier,monospace;">main()</span>，程序正式开始执行。
+      </p>
+    </div>
+
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0d7377;margin:20px 0 10px;">3.2 什么是 LD_PRELOAD？</p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      注意上面第 3 步里极其关键的规则：<strong style="color:#16213e;">ld.so 查找函数地址时是“先到先得”的</strong>。而 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#e8f5f5;color:#0d7377;padding:2px 6px;border-radius:4px;border:1px solid #99d5d6;">LD_PRELOAD</span> 就是 Linux 动态链接器提供的一个环境变量（也可通过 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:1px 4px;border-radius:3px;">/etc/ld.so.preload</span> 全局配置），它的机制很直接：
+    </p>
+
+    <!-- Pull Quote -->
+    <div style="background:#16213e;border-radius:8px;padding:22px 20px;margin:18px 0;">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">
+        <strong style="color:#5eead4;">强制让 ld.so 在加载任何其他共享库之前，先把我指定的 .so 库排在最前面加载。</strong>
+      </p>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      假设程序原本要调用官方 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:1px 4px;border-radius:3px;">libcuda.so</span> 里的 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:1px 4px;border-radius:3px;">cuMemAlloc()</span> 申请显存。现在 HAMi-core 编译出的 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#e8f5f5;color:#0d7377;padding:1px 4px;border-radius:3px;">libvgpu.so</span> 里也定义一个一模一样名字的 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:1px 4px;border-radius:3px;">cuMemAlloc()</span>，并在容器启动时设置 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#e8f5f5;color:#0d7377;padding:1px 4px;border-radius:3px;word-break:break-all;">LD_PRELOAD=/path/to/libvgpu.so</span>。接线时，<span style="font-family:'Courier New',Courier,monospace;font-size:13px;">ld.so</span> 第一个找到的就是 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;">libvgpu.so</span> 里的函数。
+    </p>
+
+    <!-- 拦截对比流程卡（替代 Mermaid 2） -->
+    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin:18px 0 20px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#0d7377;margin:0 0 12px;">// 调用链路对比：普通调用 vs LD_PRELOAD 拦截</p>
+
+      <!-- 正常路径 -->
+      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:12px 14px;margin-bottom:10px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;font-weight:700;color:#64748b;margin:0 0 8px;">正常情况（无 LD_PRELOAD）</p>
+        <p style="margin:0;line-height:2.2;font-family:'PingFang SC','Microsoft YaHei',sans-serif;">
+          <span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:700;background:#f1f5f9;color:#16213e;border:1px solid #cbd5e1;">PyTorch</span>
+          <span style="color:#94a3b8;font-size:12px;padding:0 4px;">→</span>
+          <span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:700;background:#f1f5f9;color:#16213e;border:1px solid #cbd5e1;">官方 libcuda.so</span>
+          <span style="color:#94a3b8;font-size:12px;padding:0 4px;">→</span>
+          <span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:700;background:#16213e;color:#ffffff;">GPU 驱动分配显存</span>
+        </p>
+      </div>
+
+      <!-- 拦截路径 -->
+      <div style="background:#ffffff;border:1px solid #99d5d6;border-left:4px solid #0d7377;border-radius:6px;padding:12px 14px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;font-weight:700;color:#0d7377;margin:0 0 8px;">设置 LD_PRELOAD=libvgpu.so 后</p>
+        <div style="background:#e8f5f5;border:1px solid #99d5d6;border-radius:5px;padding:8px 12px;margin-bottom:4px;">
+          <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;font-weight:700;color:#0d7377;margin:0;">1. PyTorch 调用 cuMemAlloc() → 先被 libvgpu.so 拦截并核对显存配额</p>
+        </div>
+        <p style="text-align:center;color:#94a3b8;font-size:12px;margin:3px 0;">↓ 分支判定</p>
+        <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:5px;padding:8px 12px;margin-bottom:6px;">
+          <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#be123c;margin:0;"><strong>超过配额</strong>：直接返回 CUDA OOM 错误，保护同卡其他容器</p>
+        </div>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;padding:8px 12px;">
+          <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#15803d;margin:0;"><strong>未超配额</strong>：通过 dlsym(RTLD_NEXT) 转发给官方 libcuda.so → 正常分配显存</p>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      打个比方，这就像在电话线路中间串了一个<strong style="color:#16213e;">接线员</strong>：程序以为自己在直接给 CUDA 打电话，其实请求先经过了 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;">libvgpu.so</span> 检查——合规就转接给真正的 CUDA，超标就直接挂断。而且<strong style="color:#0d7377;">整个过程对业务代码完全透明、零侵入</strong>，PyTorch、TensorFlow 和业务镜像一行代码都不用改。
+    </p>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 04 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">04</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">一个 vGPU Pod 在 K8s 里是怎么跑起来的？</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">
+      假设你的 Kubernetes 集群里有一台装有 <strong style="color:#16213e;">1 张 80GB A100</strong> 的节点，已经部署好了 HAMi（或 Volcano + HAMi Device Plugin）。现在两位开发者分别提交了 Pod A（要 10GB 显存、20% 算力）和 Pod B（要 15GB 显存、30% 算力），完整链路如下：
+    </p>
+
+    <!-- 纵向时序流程卡（替代 Mermaid 3） -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:0 0 22px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#0d7377;margin:0 0 12px;">// vGPU Pod 启动全链路</p>
+
+      <div style="background:#e8f5f5;border:1px solid #99d5d6;border-radius:6px;padding:10px 14px;margin-bottom:4px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#0d7377;margin:0 0 2px;">步骤 1 · 开发者提交 Pod A</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;">声明需求：1 块 vGPU、10000 MiB 显存、20% 算力</p>
+      </div>
+      <p style="text-align:center;color:#94a3b8;font-size:13px;margin:3px 0;">↓</p>
+
+      <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:6px;padding:10px 14px;margin-bottom:4px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#16213e;margin:0 0 2px;">步骤 2 · 调度器查账选卡</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;">确认 Node-1 的 GPU-0 余量充足，将选中的 GPU UUID 写入 Pod Annotation 并绑定节点</p>
+      </div>
+      <p style="text-align:center;color:#94a3b8;font-size:13px;margin:3px 0;">↓</p>
+
+      <div style="background:#fff3ed;border:1px solid #fdba74;border-radius:6px;padding:10px 14px;margin-bottom:4px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#e85d04;margin:0 0 2px;">步骤 3 · Kubelet 调用 Device Plugin 注入门禁</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;">挂载 GPU-0 设备 + 挂载 libvgpu.so + 注入 LD_PRELOAD 与配额环境变量</p>
+      </div>
+      <p style="text-align:center;color:#94a3b8;font-size:13px;margin:3px 0;">↓</p>
+
+      <div style="background:#16213e;border-radius:6px;padding:10px 14px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#5eead4;margin:0 0 2px;">步骤 4 · 业务容器运行</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#e2e8f0;margin:0;">PyTorch 正常跑业务，所有 CUDA / NVML 调用被 libvgpu.so 实时拦截与限流</p>
+      </div>
+    </div>
+
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0d7377;margin:18px 0 8px;">第 1 步：Pod 按需申请资源</p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 12px;text-align:justify;">
+      开发者不再只写 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:1px 5px;border-radius:3px;">nvidia.com/gpu: 1</span> 独占整卡，而是可以同时声明所需的显存和算力配额（不同接入方式资源名略有差异，以下是 HAMi / Volcano 的典型写法）：
+    </p>
+
+    <!-- YAML 代码块 Callout -->
+    <div style="background:#16213e;border-radius:8px;padding:16px;margin:12px 0 18px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#5eead4;margin:0 0 10px;">// Pod 资源配额声明示例</p>
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.85;color:#f8fafc;margin:0;white-space:pre-wrap;word-break:break-all;">resources:
+  limits:
+    nvidia.com/gpu: 1          # 1 块 vGPU（Volcano 下为 volcano.sh/vgpu-number）
+    nvidia.com/gpumem: 10000   # 显存上限 10000 MiB（约 10GB）
+    nvidia.com/gpucores: 20    # 算力上限 20%</p>
+    </div>
+
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0d7377;margin:18px 0 8px;">第 2 步：调度器记账与选卡</p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      调度器手里维护着集群里<strong style="color:#16213e;">每一张物理 GPU</strong> 的实时账本：给 Pod A 分配 GPU-0 后，账本扣减为剩余 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#e8f5f5;color:#0d7377;padding:1px 5px;border-radius:3px;">70GB / 80%</span>；紧接着 Pod B 来了，账本依然够用，于是也调度到同一张物理 GPU-0，扣减为 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#e8f5f5;color:#0d7377;padding:1px 5px;border-radius:3px;">55GB / 50%</span>，并将选中的物理卡 UUID 写进 Pod Annotation。
+    </p>
+
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0d7377;margin:18px 0 8px;">第 3 步：Device Plugin 注入“门禁”</p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      容器启动前，kubelet 调用节点上的 HAMi Device Plugin：读取 Pod Annotation 挂载对应的物理 GPU-0；最关键的一步是把宿主机上的 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#e8f5f5;color:#0d7377;padding:1px 5px;border-radius:3px;">libvgpu.so</span> 挂载进容器，通过 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:1px 5px;border-radius:3px;">LD_PRELOAD</span>（或 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:1px 5px;border-radius:3px;">/etc/ld.so.preload</span>）使其生效，并注入环境变量告知配额。
+    </p>
+
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:15px;font-weight:700;color:#0d7377;margin:18px 0 10px;">第 4 步：容器运行期，HAMi-core 接管三大核心能力</p>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d7377;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 4px;">显存硬限制</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.75;text-align:justify;">
+        拦截 <span style="font-family:'Courier New',Courier,monospace;">cuMemAlloc</span> 等分配与释放 API，在容器内通过<strong>共享内存账本</strong>统计所有进程的累计显存用量。一旦 Pod A 申请超 10GB，即使物理卡还剩 55GB，也会直接返回 OOM，保护同卡上的 Pod B。
+      </p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #14a085;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 4px;">算力配额控制</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.75;text-align:justify;">
+        拦截 <span style="font-family:'Courier New',Courier,monospace;">cuLaunchKernel</span> 等核函数提交调用。在短时间窗口内采样当前容器的算力占比，一旦超过 20%，就在 CPU 侧让后续 Kernel 提交短暂 <span style="font-family:'Courier New',Courier,monospace;">sleep</span> 排队，把平均算力平滑压在 20% 左右。
+      </p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0284c7;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:18px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 4px;">视图虚拟化</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.75;text-align:justify;">
+        拦截 NVML 查询接口。在 Pod A 里敲 <span style="font-family:'Courier New',Courier,monospace;">nvidia-smi</span>，看到的显存总量就是 <strong>10000 MiB</strong> 而非整卡 80GB，让容器觉得自己真的独占了一张 10GB 小卡。
+      </p>
+    </div>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 05 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">05</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">没有银弹：HAMi-core 的局限性</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">
+      看完上面的原理，HAMi-core 听起来几乎完美：不挑卡型、按需切分、业务代码零侵入。但它的优势来自<strong style="color:#16213e;">基于 LD_PRELOAD 的用户态 API 劫持</strong>，短板也同样源于此：
+    </p>
+
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:14px 16px;margin-bottom:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#be123c;margin:0 0 6px;">局限 1：软隔离，防不住故障波及，也挡不住“噪声邻居”</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.8;text-align:justify;">
+        同卡容器共享同一张物理 GPU 与宿主机驱动：一旦某容器触发严重驱动或硬件异常，同卡其他容器可能被连带牵连；同时 L2 缓存和显存带宽未切分，邻居密集读写仍会影响速度。此外，用户态拦截在权限管控不严时存在绕过风险，不适合完全不可信的公有云强隔离场景。
+      </p>
+    </div>
+
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:14px 16px;margin-bottom:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#be123c;margin:0 0 6px;">局限 2：算力限流是“事后拉平”，容易带来延迟抖动</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.8;text-align:justify;">
+        无法像硬件那样把算力切死，也不能打断正在执行的计算任务，只能靠时间窗口采样 + CPU 侧短暂 <span style="font-family:'Courier New',Courier,monospace;background:#ffffff;padding:1px 4px;border-radius:3px;">sleep</span> 拉平平均算力。若某任务提交了耗时很长的大计算，会先吃满整卡再通过后续排队“还债”，对延迟敏感的在线推理容易出现耗时抖动。
+      </p>
+    </div>
+
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:14px 16px;margin-bottom:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#be123c;margin:0 0 6px;">局限 3：显存统计存在误差，需要预留缓冲余量</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.8;text-align:justify;">
+        API 拦截主要统计业务主动申请的显存，驱动为每个进程维护的上下文等底层开销很难 100% 精确统计。生产中通常需要给物理卡预留一点显存余量，避免“账本没超、物理卡却 OOM”。
+      </p>
+    </div>
+
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:14px 16px;margin-bottom:18px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#be123c;margin:0 0 6px;">局限 4：强依赖动态链接与 CUDA 生态，有一定兼容性成本</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.8;text-align:justify;">
+        静态编译的程序会直接绕过 <span style="font-family:'Courier New',Courier,monospace;background:#ffffff;padding:1px 4px;border-radius:3px;">LD_PRELOAD</span>，非 CUDA 生态调用也管不到；此外，当 CUDA 或 PyTorch 升级引入新的内存/计算接口时，HAMi-core 也需要同步跟进适配。
+      </p>
+    </div>
+
+    <!-- Key Statement -->
+    <div style="background:#e8f5f5;border:1px solid #99d5d6;border-radius:8px;padding:16px 20px;margin:16px 0 0;">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#0d7377;line-height:1.85;margin:0;text-align:justify;">
+        一句话概括：HAMi-core 是用“隔离强度、延迟稳定性，以及一定的版本适配成本”，换取了“不挑卡型、任意细粒度切分、极高集群利用率”。
+      </p>
+    </div>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 06 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">06</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">总结</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      两种方案各有取舍：追求硬件强隔离选 <strong style="color:#0d7377;">MIG</strong>，追求灵活性与利用率选软件 <strong style="color:#0d7377;">vGPU</strong>。而像 <strong style="color:#16213e;">HAMi</strong> 这样的调度框架，同时支持 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#e8f5f5;color:#0d7377;padding:1px 5px;border-radius:3px;">HAMi-core</span> 软件切分与 <strong style="color:#16213e;">Dynamic MIG</strong>，一定程度上已经覆盖了两种场景。
+    </p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">
+      另一方面，用户态拦截不可避免会带来性能损耗、限流抖动与绕过风险，这也是阿里云 <strong style="color:#0d7377;">cGPU</strong>、腾讯云 <strong style="color:#0d7377;">qGPU</strong> 等云厂商选择自研<strong style="color:#16213e;">内核态拦截</strong>方案的原因。
+    </p>
+
+    <!-- Footer -->
+    <div style="margin-top:36px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;color:#94a3b8;letter-spacing:0.06em;margin:0;line-height:1.8;">
+        GPU 虚拟化 · HAMi · HAMi-core · Kubernetes · 云原生 AI 基础设施
+      </p>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

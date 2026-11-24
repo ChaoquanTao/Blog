@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPU虚拟化（一）：NVIDIA MIG 硬件切分</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f7f8;font-family:'STSong','SimSun','Noto Serif SC',serif;color:#334155;">
+
+<!--
+  WeChat Official Account HTML (Inline-Style Only)
+  Theme: 深海蓝绿 (Deep Ocean Teal)
+    navy:         #16213e
+    teal:         #0d7377
+    teal_light:   #e8f5f5
+    teal_mid:     #14a085
+    teal_border:  #99d5d6
+    accent:       #e85d04
+    accent_light: #fff3ed
+-->
+
+<div style="max-width:680px;margin:0 auto;background:#ffffff;">
+
+  <!-- ==================== HERO ==================== -->
+  <div style="background:#16213e;padding:48px 24px 42px;text-align:center;">
+    <div style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;letter-spacing:0.12em;color:#5eead4;background:#1e3448;border:1px solid #14a085;padding:5px 16px;border-radius:20px;margin-bottom:20px;">GPU 虚拟化系列 · 01</div>
+    <div style="height:6px;"></div>
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:25px;font-weight:700;color:#ffffff;line-height:1.5;margin:0 0 14px;letter-spacing:0.04em;">
+      NVIDIA <span style="color:#5eead4;">MIG</span> 硬件切分<br>如何把一张大卡切成多张小卡？
+    </p>
+    <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#94a3b8;letter-spacing:0.05em;margin:0;line-height:1.75;">
+      从 80GB 显存浪费到硬件级资源隔离<br>原理、Profile 规格、实战命令与 K8s 落地局限
+    </p>
+    <div style="width:40px;height:2px;background:#14a085;margin:22px auto 0;"></div>
+  </div>
+
+  <!-- ==================== BODY WRAPPER ==================== -->
+  <div style="padding:28px 20px 36px;">
+
+    <!-- 导语 Callout -->
+    <div style="background:#e8f5f5;border-left:4px solid #0d7377;padding:16px 18px;margin:0 0 28px;border-radius:0 6px 6px 0;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;color:#0d7377;margin:0 0 8px;">阅读导引</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.85;margin:0;color:#334155;text-align:justify;">
+        这是「GPU 虚拟化」系列的第一篇。本文聚焦 NVIDIA 官方的硬件级切分方案 <strong style="color:#0d7377;">MIG（Multi-Instance GPU）</strong>，讲清它为什么能兼顾利用率与确定性，以及在真实 Kubernetes 集群中落地时绕不开的三大现实瓶颈。
+      </p>
+    </div>
+
+    <!-- ==================== SECTION 01 ==================== -->
+    <div style="margin:32px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">01</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">一个让人肉疼的问题：80GB 的卡，只用了 8GB</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      如果你在公司维护过 AI 基础设施，或者自己租过 GPU 服务器，大概率见过这样一幕：团队花大价钱采购了一批 <strong style="color:#16213e;">NVIDIA A100 / H100（80GB 显存）</strong>，结果登录监控一看——
+    </p>
+
+    <!-- 三个典型场景卡片 -->
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #0d7377;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 4px;">业务 A · 轻量级 Embedding 模型</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.7;">只占了 <strong style="color:#0d7377;">4GB 显存</strong>、<strong style="color:#0d7377;">10% 算力</strong>。</p>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #14a085;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 4px;">业务 B · 算法同学的 Jupyter Notebook</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.7;">写代码时 GPU 利用率几乎是 <strong style="color:#0d7377;">0%</strong>，偶尔跑测试占 <strong style="color:#0d7377;">8GB 显存</strong>。</p>
+    </div>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #e85d04;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:18px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 4px;">业务 C · 中小尺寸模型在线推理</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#475569;margin:0;line-height:1.7;">峰值也就用 <strong style="color:#e85d04;">15GB 显存</strong>。</p>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      但尴尬的是，在传统的使用方式下（尤其是直接交给容器或 Kubernetes 管理时），<strong style="color:#16213e;">GPU 的最小分配单位往往是“1 张整卡”</strong>。业务 A 只要 4GB 显存，却独占了整张 80GB 的 A100，剩下的 76GB 显存和绝大部分算力只能干瞪眼闲置。
+    </p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#16213e;border-left:3px solid #0d7377;padding-left:16px;margin:18px 0;line-height:1.9;text-align:justify;">
+      这时候你可能会问：<strong>CPU 不是一直都能多个进程共享吗？为什么不直接把 A、B、C 三个进程全塞到同一张 GPU 上跑？</strong>
+    </p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      确实可以硬塞，但很快就会踩到三个大坑：
+    </p>
+
+    <!-- 三个大坑编号卡片 -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.75;margin:0;text-align:justify;">
+        <span style="display:inline-block;width:20px;height:20px;background:#e85d04;border-radius:50%;text-align:center;line-height:20px;font-size:11px;font-weight:700;color:#ffffff;margin-right:8px;vertical-align:text-bottom;">1</span><strong style="color:#16213e;">显存互相踩踏</strong>：GPU 显存不像操作系统虚拟内存那样可以方便地 swap 到磁盘。一旦业务 B 突然多申请了一点显存，不仅自己 OOM，还可能把同卡上正在正常提供服务的业务 A 一起拖下水。
+      </p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.75;margin:0;text-align:justify;">
+        <span style="display:inline-block;width:20px;height:20px;background:#e85d04;border-radius:50%;text-align:center;line-height:20px;font-size:11px;font-weight:700;color:#ffffff;margin-right:8px;vertical-align:text-bottom;">2</span><strong style="color:#16213e;">“噪声邻居”导致延迟飙升</strong>：多个任务同时往一张卡里塞计算任务，GPU 内部的计算单元和显存带宽会激烈争抢。平时 P99 延迟 20ms 的在线推理服务，可能因为隔壁同学突然跑了个测试脚本，瞬间抖动到 200ms。
+      </p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:18px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:#334155;line-height:1.75;margin:0;text-align:justify;">
+        <span style="display:inline-block;width:20px;height:20px;background:#e85d04;border-radius:50%;text-align:center;line-height:20px;font-size:11px;font-weight:700;color:#ffffff;margin-right:8px;vertical-align:text-bottom;">3</span><strong style="color:#16213e;">故障域无法隔离</strong>：如果某个进程触发了严重的 GPU 硬件/驱动错误（比如常见的 Xid 错误），整张卡上的所有进程都会跟着一起遭殃。
+      </p>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      所以，我们需要的不是“粗暴地挤在一起用”，而是<strong style="color:#16213e;">把一张大 GPU 合理地切分成几张互相隔离的“小 GPU”</strong>——这就是 <strong style="color:#0d7377;">GPU 虚拟化（切分）技术</strong>要解决的核心问题。
+    </p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      切分 GPU 通常有两条路线：<strong style="color:#16213e;">硬件切分</strong>和<strong style="color:#16213e;">软件切分</strong>。本篇我们先聊 NVIDIA 官方给出的硬件级答案——<span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#e8f5f5;color:#0d7377;padding:2px 6px;border-radius:4px;border:1px solid #99d5d6;">MIG</span>。
+    </p>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 02 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">02</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">什么是 NVIDIA MIG？</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      <strong style="color:#16213e;">MIG</strong> 的全称是 <strong style="color:#0d7377;">Multi-Instance GPU（多实例 GPU）</strong>，是 NVIDIA 从 Ampere 架构（如 A100、A30）开始，直接做在 GPU 芯片内部的一项<strong style="color:#16213e;">硬件级切分技术</strong>。
+    </p>
+
+    <!-- Pull Quote 精装单间比喻 -->
+    <div style="background:#16213e;border-radius:8px;padding:24px 22px;margin:22px 0;">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:30px;color:#14a085;line-height:1;margin:0 0 8px;">“</p>
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#ffffff;line-height:1.9;margin:0;text-align:justify;">
+        如果把一张 80GB 的 A100 比作一套 <strong style="color:#5eead4;">200 平米的大平层</strong>，那么 MIG 做的事情，就是在房子里<strong style="color:#5eead4;">砌上真正的实心承重墙</strong>，把它改造成几套带独立水电煤、独立大门的精装单间。
+      </p>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      注意“硬件级”这三个字的含金量。MIG 切分的<strong style="color:#16213e;">不只是显存容量</strong>，而是把整张 GPU 的核心硬件资源在物理电路层面一分为多：
+    </p>
+
+    <!-- 四项硬件隔离卡片 -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d7377;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 3px;">计算单元（SM, Streaming Multiprocessor）</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.65;">每个实例拥有专属的计算核心，互不抢占。</p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d7377;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 3px;">显存与显存控制器</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.65;">专属显存空间 + 专属显存带宽通道。</p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d7377;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:8px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 3px;">二级缓存（L2 Cache）</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.65;">各自独立，不会出现你把我的缓存刷掉的情况。</p>
+    </div>
+
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #0d7377;border-radius:0 6px 6px 0;padding:12px 16px;margin-bottom:20px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#16213e;margin:0 0 3px;">独立故障域</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#64748b;margin:0;line-height:1.65;">单个实例的计算/显存异常会被限制在自身故障域内，通常不会波及同卡其他实例（底层物理卡级致命硬件故障除外）。</p>
+    </div>
+
+    <!-- 可视化架构图（替代 Mermaid 1） -->
+    <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:16px;margin:20px 0 22px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#0d7377;margin:0 0 12px;">// 架构示意：物理 GPU（NVIDIA A100 80GB）硬件切分</p>
+
+      <div style="background:#16213e;border-radius:6px;padding:10px 14px;margin-bottom:10px;text-align:center;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#ffffff;margin:0;">NVIDIA A100 80GB 物理卡（混切 4 个独立实例）</p>
+      </div>
+
+      <!-- Instance 1 -->
+      <div style="background:#ffffff;border:1px solid #99d5d6;border-left:4px solid #0d7377;border-radius:6px;padding:10px 14px;margin-bottom:8px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#0d7377;margin:0 0 4px;">MIG 实例 1 · 3g.40gb</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0 0 4px;line-height:1.6;">独立 SM 计算单元 + 独立 40GB 显存 + 独立 L2 Cache</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#16213e;font-weight:700;margin:0;">→ 承载：业务 A（较大尺寸的推理服务）</p>
+      </div>
+
+      <!-- Instance 2 -->
+      <div style="background:#ffffff;border:1px solid #99d5d6;border-left:4px solid #14a085;border-radius:6px;padding:10px 14px;margin-bottom:8px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#0d7377;margin:0 0 4px;">MIG 实例 2 · 2g.20gb</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0 0 4px;line-height:1.6;">独立 SM 计算单元 + 独立 20GB 显存 + 独立 L2 Cache</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#16213e;font-weight:700;margin:0;">→ 承载：业务 B（中等规模推理服务）</p>
+      </div>
+
+      <!-- Instance 3 -->
+      <div style="background:#ffffff;border:1px solid #cbd5e1;border-left:4px solid #0284c7;border-radius:6px;padding:10px 14px;margin-bottom:8px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#0284c7;margin:0 0 4px;">MIG 实例 3 · 1g.10gb</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0 0 4px;line-height:1.6;">独立 SM 计算单元 + 独立 10GB 显存 + 独立 L2 Cache</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#16213e;font-weight:700;margin:0;">→ 承载：业务 C（Embedding 服务）</p>
+      </div>
+
+      <!-- Instance 4 -->
+      <div style="background:#ffffff;border:1px solid #cbd5e1;border-left:4px solid #e85d04;border-radius:6px;padding:10px 14px;margin-bottom:0;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#e85d04;margin:0 0 4px;">MIG 实例 4 · 1g.10gb</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0 0 4px;line-height:1.6;">独立 SM 计算单元 + 独立 10GB 显存 + 独立 L2 Cache</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#16213e;font-weight:700;margin:0;">→ 承载：业务 D（开发调试环境）</p>
+      </div>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      切分完成后，在操作系统、Docker 容器以及 PyTorch / TensorFlow 眼里，每一个 MIG 实例就是一张<strong style="color:#16213e;">货真价实的独立小显卡</strong>。你的业务代码<strong style="color:#0d7377;">一行都不用改</strong>，该怎么调 CUDA 还是怎么调 CUDA。
+    </p>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 03 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">03</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">MIG 是怎么切分的？认识一下 Profile</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      既然是硬件电路级别的切分，就意味着不能像切豆腐一样随便拿刀乱划——你必须按照芯片内部预设好的物理边界来切。这些预设好的切分规格，在 NVIDIA 文档里叫做 <strong style="color:#0d7377;">Profile（配置模板）</strong>。
+    </p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      以最常见的 <strong style="color:#16213e;">A100 80GB</strong> 为例，硬件底层将其划分为 <strong style="color:#0d7377;">7 个计算切片（Compute Slice）</strong>和 <strong style="color:#0d7377;">8 个显存切片（每份 10GB）</strong>，单张卡<strong style="color:#16213e;">最多可以切出 7 个 MIG 实例</strong>。常见 Profile 如下：
+    </p>
+
+    <!-- 3 列移动端友好数据表 -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0 18px;border-collapse:collapse;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;">
+      <tr>
+        <td style="padding:10px 10px;background:#16213e;color:#ffffff;font-weight:700;">Profile 规格</td>
+        <td style="padding:10px 10px;background:#16213e;color:#ffffff;font-weight:700;">算力 / 显存占比</td>
+        <td style="padding:10px 10px;background:#16213e;color:#ffffff;font-weight:700;">单卡上限</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#0d7377;font-family:'Courier New',Courier,monospace;font-weight:700;">1g.10gb</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;">1/7 算力 · 10 GB</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;">最多 7 个</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#0d7377;font-family:'Courier New',Courier,monospace;font-weight:700;">2g.20gb</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#334155;">2/7 算力 · 20 GB</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#64748b;">最多 3 个</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#0d7377;font-family:'Courier New',Courier,monospace;font-weight:700;">3g.40gb</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;">3/7 算力 · 40 GB</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;">最多 2 个</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#0d7377;font-family:'Courier New',Courier,monospace;font-weight:700;">4g.40gb</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#334155;">4/7 算力 · 40 GB</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#f8fafc;color:#64748b;">最多 1 个</td>
+      </tr>
+      <tr>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#0d7377;font-family:'Courier New',Courier,monospace;font-weight:700;">7g.80gb</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#334155;">7/7 算力 · 80 GB</td>
+        <td style="padding:10px 10px;border-bottom:1px solid #e2e8f0;background:#ffffff;color:#64748b;">1 个（整卡）</td>
+      </tr>
+    </table>
+
+    <!-- 工程细节 Callout：解释 7 计算切片 + 8 显存切片 -->
+    <div style="background:#fff3ed;border-left:4px solid #e85d04;padding:14px 16px;margin:0 0 18px;border-radius:0 6px 6px 0;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;color:#e85d04;margin:0 0 6px;">硬件细节 · 为什么 7 × 10GB ≠ 80GB？</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;line-height:1.8;margin:0;color:#334155;text-align:justify;">
+        因为 A100 80GB 底层是 <strong>7 份计算切片 + 8 份显存切片（每份 10GB）</strong>。所以当你把整卡全切成 7 个 <span style="font-family:'Courier New',Courier,monospace;background:#ffffff;padding:1px 4px;border-radius:3px;">1g.10gb</span> 时，会有 10GB 显存无法分配；而 <span style="font-family:'Courier New',Courier,monospace;background:#ffffff;padding:1px 4px;border-radius:3px;">3g.40gb</span> 实际占用了 3/7 算力 + 4/8 显存。
+      </p>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      命名规则非常直观：<span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#e8f5f5;color:#0d7377;padding:2px 6px;border-radius:4px;border:1px solid #99d5d6;">Xg.Ygb</span> 表示占 <strong style="color:#16213e;">X 份计算切片、Y GB 显存</strong>。而且你不需要把整张卡切成同一种规格，完全可以<strong style="color:#16213e;">混切</strong>——比如前面图示里的 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:2px 5px;border-radius:3px;">3g.40gb + 2g.20gb + 1g.10gb + 1g.10gb</span>。
+    </p>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      在单机上开启和使用 MIG 也非常简单，只需要用 <span style="font-family:'Courier New',Courier,monospace;font-size:14px;background:#e8f5f5;color:#0d7377;padding:2px 6px;border-radius:4px;border:1px solid #99d5d6;">nvidia-smi</span> 命令即可：
+    </p>
+
+    <!-- 代码块 Callout -->
+    <div style="background:#16213e;border-radius:8px;padding:16px 16px;margin:16px 0 18px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#5eead4;margin:0 0 10px;">// 单机开启并切分 MIG 实例</p>
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.8;color:#94a3b8;margin:0 0 4px;"># 1. 在 0 号卡上开启 MIG 模式</p>
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.7;color:#f8fafc;margin:0 0 10px;word-break:break-all;">sudo nvidia-smi -i 0 -mig 1</p>
+
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.8;color:#94a3b8;margin:0 0 4px;"># 注：开启后通常需在 GPU 空闲时重置卡（或重启节点）使模式生效</p>
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.7;color:#f8fafc;margin:0 0 10px;word-break:break-all;">sudo nvidia-smi -i 0 --gpu-reset</p>
+
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.8;color:#94a3b8;margin:0 0 4px;"># 2. 查看当前显卡支持的 Profile 列表</p>
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.7;color:#f8fafc;margin:0 0 10px;word-break:break-all;">nvidia-smi mig -lgip</p>
+
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.8;color:#94a3b8;margin:0 0 4px;"># 3. 切分 1 个 3g.40gb + 2 个 2g.20gb（-C 会自动创建 Compute Instance）</p>
+      <p style="font-family:'Courier New',Courier,monospace;font-size:12px;line-height:1.7;color:#5eead4;margin:0;word-break:break-all;">sudo nvidia-smi mig -cgi 9,14,14 -C</p>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 14px;text-align:justify;">
+      （注：示例中的 Profile ID 依实际输出为准，较新驱动中也支持直接写 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;color:#0f172a;padding:2px 5px;border-radius:3px;">3g.40gb,2g.20gb,2g.20gb</span>。）执行完之后，再运行 <span style="font-family:'Courier New',Courier,monospace;font-size:13px;background:#e8f5f5;color:#0d7377;padding:2px 6px;border-radius:4px;">nvidia-smi -L</span>，就能看到每个 MIG 实例拥有自己独立的 UUID，把对应 UUID 分配给不同容器或进程即可使用。
+    </p>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 04 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">04</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">MIG 有什么用？适合哪些场景？</span>
+    </div>
+
+    <!-- Key Statement 高亮结论 -->
+    <div style="background:#e8f5f5;border:1px solid #99d5d6;border-radius:8px;padding:18px 20px;margin:16px 0 20px;">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#0d7377;line-height:1.85;margin:0;text-align:justify;">
+        一句话概括 MIG 的核心价值：在调度与虚拟化层几乎零开销的前提下，用硬件隔离换取“利用率”与“确定性”的兼得。
+      </p>
+    </div>
+
+    <!-- 三大优势卡片 -->
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:14px 16px;margin-bottom:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#15803d;margin:0 0 6px;">优势一：性能确定性极高（无噪声邻居）</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.75;text-align:justify;">
+        因为计算单元、缓存、显存带宽全部物理隔离，隔壁实例跑满负载，你的推理延迟也不会跟着抖动。
+      </p>
+    </div>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:14px 16px;margin-bottom:10px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#15803d;margin:0 0 6px;">优势二：虚拟化调度层几乎零开销</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.75;text-align:justify;">
+        不需要在软件层做指令拦截或转发，应用直接跑在硬件切片上（仅存在少量硬件切分带来的固定 SM / 显存边角损耗，如 A100 开启 MIG 后可用 SM 从 108 降至 98）。
+      </p>
+    </div>
+
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:14px 16px;margin-bottom:20px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#15803d;margin:0 0 6px;">优势三：高安全性与故障隔离</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.75;text-align:justify;">
+        多租户共用一张物理卡时，彼此看不到对方的显存数据，单个实例出错也不会轻易影响他人。
+      </p>
+    </div>
+
+    <!-- 适用场景 Callout -->
+    <div style="background:#f8fafc;border-left:4px solid #14a085;padding:14px 18px;margin:0 0 14px;border-radius:0 6px 6px 0;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;color:#0d7377;margin:0 0 8px;">最适合落地的三大场景</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.85;margin:0 0 6px;color:#334155;">• <strong style="color:#16213e;">对 P99 延迟敏感的在线推理服务</strong>（尤其是多租户生产环境）；</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.85;margin:0 0 6px;color:#334155;">• <strong style="color:#16213e;">团队内部共享的高端卡开发/评测环境</strong>（每人分一个 1g.10gb 互不打扰）；</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;line-height:1.85;margin:0;color:#334155;">• <strong style="color:#16213e;">中小规模模型的并行 CI/CD 评测任务</strong>。</p>
+    </div>
+
+    <!-- 分割线 -->
+    <div style="text-align:center;margin:30px 0;">
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#0d7377;vertical-align:middle;margin:0 10px;"></span>
+      <span style="display:inline-block;width:28%;height:1px;background:#e2e8f0;vertical-align:middle;"></span>
+    </div>
+
+    <!-- ==================== SECTION 05 ==================== -->
+    <div style="margin:28px 0 18px;padding-bottom:8px;border-bottom:2px solid #0d7377;">
+      <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;color:#0d7377;background:#e8f5f5;border:1px solid #99d5d6;padding:2px 8px;border-radius:4px;letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">05</span><span style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;font-weight:700;color:#16213e;line-height:1.45;vertical-align:middle;">MIG 很香，但为什么现实中还不够用？</span>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 16px;text-align:justify;">
+      看到这里你可能会觉得：MIG 这么完美，那全用 MIG 不就完了吗？但在真实的工程落地中，尤其是在 <strong style="color:#16213e;">Kubernetes 集群</strong>里大规模使用时，MIG 很快就会暴露出三个绕不开的局限：
+    </p>
+
+    <!-- 局限 1 -->
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:14px 16px;margin-bottom:12px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#be123c;margin:0 0 6px;">局限 1：挑硬件，绝大多数卡根本不支持 MIG</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.8;text-align:justify;">
+        MIG 是高端数据中心卡的专属特性，主要支持 <strong>A30、A100、H100、H200、B200</strong> 等型号。而大量公司集群里广泛存在的 <strong>T4、V100、A10、L40、RTX 4090</strong> 等显卡，芯片里压根没有 MIG 硬件电路——想用也用不了。
+      </p>
+    </div>
+
+    <!-- 局限 2 -->
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:14px 16px;margin-bottom:12px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#be123c;margin:0 0 6px;">局限 2：切分粒度不够细，规格太死板</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.8;text-align:justify;">
+        MIG 只能按预设的 Profile 切分，且单卡最多切 <strong>7 份</strong>。假设集群里有很多小推理服务只需要 <strong>2GB 显存</strong>，哪怕分最小的 <span style="font-family:'Courier New',Courier,monospace;background:#ffffff;padding:1px 4px;border-radius:3px;">1g.10gb</span> 实例，单卡也只能塞 7 个服务，每个实例里还是浪费了 8GB 显存。更没法做到“我要 13GB 显存、15% 算力”这种任意规格的按需申请。
+      </p>
+    </div>
+
+    <!-- 局限 3 -->
+    <div style="background:#fff1f2;border:1px solid #fecdd3;border-radius:6px;padding:14px 16px;margin-bottom:16px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;font-weight:700;color:#be123c;margin:0 0 6px;">局限 3：在 K8s 集群里，静态切分容易产生严重“规格碎片”</p>
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;color:#334155;margin:0;line-height:1.8;text-align:justify;">
+        在传统的 K8s Device Plugin 集成方式下，运维通常需要提前在节点上把卡切好固定规格。一旦业务规格变化，马上就会出现下面这种尴尬局面：
+      </p>
+    </div>
+
+    <!-- 纵向步骤流程（替代 Mermaid 2） -->
+    <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin:0 0 18px;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;color:#64748b;margin:0 0 12px;">// K8s 静态切分导致的“规格碎片”困局</p>
+
+      <div style="background:#e8f5f5;border:1px solid #99d5d6;border-radius:6px;padding:10px 14px;margin-bottom:4px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#0d7377;margin:0 0 2px;">① 节点当前状态</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;">某节点 A100 提前静态切好 7 个 1g.10gb（全部空闲）</p>
+      </div>
+
+      <p style="text-align:center;color:#94a3b8;font-size:14px;margin:4px 0;">↓ 匹配规格</p>
+
+      <div style="background:#fff3ed;border:1px solid #fdba74;border-radius:6px;padding:10px 14px;margin-bottom:4px;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#e85d04;margin:0 0 2px;">② 新到来的 Pod 请求</p>
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:#475569;margin:0;">申请 1 个 3g.40gb 实例</p>
+      </div>
+
+      <p style="text-align:center;color:#94a3b8;font-size:14px;margin:4px 0;">↓ 节点没有 3g.40gb 规格</p>
+
+      <div style="background:#be123c;border-radius:6px;padding:12px 14px;text-align:center;">
+        <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:700;color:#ffffff;margin:0;">调度失败（Pending）：明明整张 80GB 卡全空着</p>
+      </div>
+    </div>
+
+    <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;color:#334155;line-height:1.9;margin:0 0 18px;text-align:justify;">
+      明明整张 80GB 的卡一滴都没用，只因为提前切成了 7 块 10GB，来了一个要 40GB 的 Pod 竟然<strong style="color:#be123c;">调度不上去</strong>！传统方式下只能人工停服、重置 MIG 配置、重新切卡。即便借助 NVIDIA GPU Operator 或较新的 K8s DRA（Dynamic Resource Allocation）生态实现动态重配，生产落地门槛依然较高，且始终无法突破硬件卡型与固定 Profile 的边界。
+    </p>
+
+    <div style="background:#e8f5f5;border-left:4px solid #0d7377;padding:16px 18px;margin:20px 0 0;border-radius:0 6px 6px 0;">
+      <p style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:16px;font-weight:700;color:#16213e;line-height:1.9;margin:0;text-align:justify;">
+        这就是为什么在很多真实生产场景下，我们还需要使用<strong style="color:#0d7377;">软件层 GPU 虚拟化方案（如开源的 HAMi 与 HAMi-core）</strong>来突破卡型限制、实现按需动态切分——下一篇，我们就来拆解它的底层实现原理。
+      </p>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top:36px;padding-top:16px;border-top:1px solid #e2e8f0;text-align:center;">
+      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:11px;color:#94a3b8;letter-spacing:0.06em;margin:0;line-height:1.8;">
+        GPU 虚拟化 · NVIDIA MIG · 云原生 AI 基础设施
+      </p>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

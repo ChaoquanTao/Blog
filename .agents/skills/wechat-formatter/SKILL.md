@@ -48,17 +48,20 @@ Review 完成后询问用户是否将修正应用到排版中，再进行第二�
 
 ### 微信渲染环境的硬约束
 
-**绝对禁止（会失效或被过滤）：**
+**绝对禁止（会失效、被过滤或破坏视觉）：**
 - `display: flex` / `display: grid`
 - CSS 自定义变量 `var(--xxx)`
 - `::before` / `::after` 伪元素
 - 外链字体（`@font-face`、Google Fonts）
 - `<style>` 块 / 外链 CSS
 - `position: absolute/fixed`
+- **用 `<table>` 排章节标题或编号卡片**：微信公众号编辑器会给 `<table>`/`<td>` 自动叠加默认灰色网格边框，导致标题/卡片外围出现多余框线。仅在**真正的数据表格**中使用 `<table>`（且显式声明 `border`）
+- **在文章正文、卡片标题、流程节点中使用 emoji 或对错装饰符号**（如 `✓`、`✗`、`❌`、`✅`、`⚠️`、`🔥` 等），保持克制专业的技术排版风格
 
 **必须使用：**
 - 所有样式写成 `style=""` 行内属性
-- 布局用 `<table>`（多列）或块级 `<div>`（单列）
+- 章节标题、编号卡片、单列布局一律用块级 `<div>` + 行内 `<span>`
+- 仅数据表格使用 `<table>`
 - 字体用系统字体栈（见下方）
 - 所有颜色用 hex 值，不用 `rgba()` 的 CSS 变量形式
 
@@ -144,22 +147,17 @@ Review 完成后询问用户是否将修正应用到排版中，再进行第二�
 
 ### B. 章节标题
 
+> ⚠️ 严禁使用 `<table>` 排版章节标题（微信编辑器会给 `<td>` 强加默认网格边框）。统一使用纯 `<div>` + 行内 `<span>` 实现：
+
 ```html
-<table width="100%" cellpadding="0" cellspacing="0" style="margin:36px 0 18px;">
-  <tr>
-    <td width="46" valign="top" style="padding-top:2px;">
-      <span style="display:inline-block;font-size:11px;font-weight:500;
-      color:#6366f1;background:#eef2ff;
-      border:1px solid rgba(99,102,241,0.25);padding:4px 9px;
-      border-radius:4px;letter-spacing:0.06em;white-space:nowrap;">01</span>
-    </td>
-    <td valign="top">
-      <p style="font-family:'STSong','SimSun',serif;font-size:19px;
-      font-weight:700;color:#0f172a;line-height:1.45;margin:0;
-      padding-bottom:8px;border-bottom:2px solid #6366f1;">章节标题</p>
-    </td>
-  </tr>
-</table>
+<div style="margin:36px 0 18px;padding-bottom:8px;border-bottom:2px solid #6366f1;">
+  <span style="display:inline-block;font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:11px;font-weight:700;color:#6366f1;background:#eef2ff;
+  border:1px solid #c7d2fe;padding:2px 8px;border-radius:4px;
+  letter-spacing:0.06em;vertical-align:middle;margin-right:10px;">01</span><span
+  style="font-family:'STSong','SimSun','Noto Serif SC',serif;font-size:19px;
+  font-weight:700;color:#0f172a;line-height:1.45;vertical-align:middle;">章节标题</span>
+</div>
 ```
 
 ---
@@ -300,20 +298,20 @@ padding:14px 16px;margin-bottom:8px;">
 
 ---
 
-### J. 优缺点（纵向，移动端友好）
+### J. 优缺点（纵向，移动端友好，不使用 ✓ / ✗ 符号）
 
 ```html
 <!-- 优点 -->
-<div style="background:#f0fdf4;border:1px solid rgba(34,197,94,0.2);
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;
 border-radius:6px;padding:12px 16px;margin-bottom:8px;">
-  <p style="font-size:12px;font-weight:700;color:#16a34a;margin:0 0 6px;">✓ 优点</p>
+  <p style="font-size:13px;font-weight:700;color:#15803d;margin:0 0 6px;">优点</p>
   <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
   font-size:13px;color:#334155;margin:0;line-height:1.7;">内容</p>
 </div>
 <!-- 缺点 -->
-<div style="background:#fff1f2;border:1px solid rgba(244,63,94,0.2);
+<div style="background:#fff1f2;border:1px solid #fecdd3;
 border-radius:6px;padding:12px 16px;margin-bottom:20px;">
-  <p style="font-size:12px;font-weight:700;color:#be123c;margin:0 0 6px;">✗ 代价</p>
+  <p style="font-size:13px;font-weight:700;color:#be123c;margin:0 0 6px;">代价</p>
   <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
   font-size:13px;color:#334155;margin:0;line-height:1.7;">内容</p>
 </div>
@@ -377,25 +375,17 @@ font-family:'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;">
 
 ---
 
-### N. 编号原则卡片
+### N. 编号原则卡片（纯 div 实现，避免表格边框）
 
 ```html
 <div style="background:#ffffff;border:1px solid #e2e8f0;
 border-radius:6px;padding:14px 16px;margin-bottom:8px;">
-  <table cellpadding="0" cellspacing="0"><tr valign="top">
-    <td width="32" style="padding-top:1px;">
-      <div style="width:24px;height:24px;background:#6366f1;border-radius:50%;
-      text-align:center;line-height:24px;">
-        <span style="font-size:12px;font-weight:700;color:#ffffff;">1</span>
-      </div>
-    </td>
-    <td style="padding-left:10px;">
-      <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
-      font-size:14px;color:#334155;line-height:1.7;margin:0;">
-      <strong>原则标题</strong>：详细说明。
-      </p>
-    </td>
-  </tr></table>
+  <p style="font-family:'PingFang SC','Microsoft YaHei',sans-serif;
+  font-size:14px;color:#334155;line-height:1.75;margin:0;">
+    <span style="display:inline-block;width:20px;height:20px;background:#6366f1;
+    border-radius:50%;text-align:center;line-height:20px;font-size:11px;
+    font-weight:700;color:#ffffff;margin-right:8px;vertical-align:text-bottom;">1</span><strong>原则标题</strong>：详细说明。
+  </p>
 </div>
 ```
 
@@ -503,7 +493,8 @@ Hero（标题 + 副标题 + 标签）
 - [ ] 没有 `::before` / `::after` 伪元素
 - [ ] 没有 `<style>` 标签块
 - [ ] 没有 Google Fonts 或其他外链字体
-- [ ] 多列布局全部用 `<table>` 实现
+- [ ] 章节标题、编号卡片未使用 `<table>` 布局（避免微信编辑器自动添加默认网格边框）
+- [ ] 正文、卡片标题、流程节点中不含 emoji 或 `✓` / `✗` / `❌` 等装饰符号
 - [ ] 所有颜色为 hex 值
 - [ ] 正文字号 ≥ 16px
 - [ ] 段落行高 ≥ 1.9
