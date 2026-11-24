@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "20261023-Codex&Claude桌面端零基础安装教程.md",
+                "file": "20261123-GPU虚拟化（二）：HAMi 与 HAMi-core 原理.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "20261023-Codex&Claude桌面端零基础安装教程"
+              "title": "20261123-GPU虚拟化（二）：HAMi 与 HAMi-core 原理"
             }
           },
           {
@@ -221,6 +221,7 @@
   },
   "active": "0b98efe9b25f9906",
   "lastOpenFiles": [
+    "20261023-Codex&Claude桌面端零基础安装教程.md",
     "20261124-一次DDP训练背后：CPU、GPU与NCCL是如何协作的.md",
     "nccl_stream_workflow.md",
     "20261123-GPU虚拟化（二）：HAMi 与 HAMi-core 原理.md",
@@ -240,7 +241,6 @@
     "images/codex-claude-install/wechat",
     "Codex&Claude零基础安装教程_wechat.html",
     "images/codex-claude-install",
-    "20261023-Codex&Claude桌面端零基础安装教程.md",
     "什么是Agent基础设施_wechat.html",
     "AGENTS.md",
     "20260731-容器里的RDMA：hostNetwork与SR-IOV的两条路.md",
